@@ -1,0 +1,380 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TENANT
+  LANDLORD
+}
+
+enum PropertyStatus {
+  DRAFT
+  REVIEW
+  LIVE
+  LET
+  ARCHIVED
+}
+
+enum VerificationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  PASSED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum ViewingStatus {
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  COMPLETED
+  CANCELLED
+}
+
+enum OfferStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  DOCUMENT
+  SYSTEM
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  passwordHash       String
+  name               String
+  phone              String?
+  role               UserRole
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tenantProfile      TenantProfile?
+  landlordProfile    LandlordProfile?
+  messages           Message[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  systemEvents       SystemEvent[]
+  photographerRequests PhotographerRequest[]
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model TenantProfile {
+  id                   String              @id @default(uuid())
+  userId               String              @unique
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  affordabilityPcm     Int?
+  employmentSector     String?
+  passportGeneratedAt  DateTime?
+  referencingProfile   ReferencingProfile?
+  savedProperties      SavedProperty[]
+  viewingRequests      ViewingRequest[]
+  offers               Offer[]
+  riskAssessments      RiskAssessment[]
+}
+
+model LandlordProfile {
+  id          String      @id @default(uuid())
+  userId      String      @unique
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String?
+  payoutRef   String?
+  properties  Property[]
+}
+
+model Property {
+  id                    String              @id @default(uuid())
+  landlordProfileId     String
+  landlordProfile       LandlordProfile     @relation(fields: [landlordProfileId], references: [id], onDelete: Cascade)
+  title                 String
+  streetName            String
+  area                  String
+  city                  String
+  postcodeDistrict      String
+  fullAddress           String
+  postcode              String
+  type                  String
+  bedrooms              Int
+  bathrooms             Int
+  rentPcm               Int
+  availableFrom         DateTime
+  furnishingStatus      String?
+  description           String
+  status                PropertyStatus      @default(DRAFT)
+  verifiedEnquiriesOnly Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  images                PropertyImage[]
+  documents             PropertyDocument[]
+  drafts                PropertyDraft[]
+  savedBy               SavedProperty[]
+  viewingRequests       ViewingRequest[]
+  offers                Offer[]
+  tenancies             Tenancy[]
+  deal                  Deal?
+
+  @@index([city, area])
+  @@index([postcodeDistrict])
+  @@index([rentPcm])
+  @@index([bedrooms])
+  @@index([status])
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  url        String
+  alt        String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId, sortOrder])
+}
+
+model PropertyDocument {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model PropertyDraft {
+  id         String   @id @default(uuid())
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  payload    Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Conversation {
+  id          String    @id @default(uuid())
+  subject     String
+  propertyId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messages    Message[]
+
+  @@index([propertyId])
+  @@index([updatedAt])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  kind           MessageKind  @default(TEXT)
+  body           String
+  attachmentUrl  String?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model ViewingRequest {
+  id              String        @id @default(uuid())
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+  status          ViewingStatus @default(REQUESTED)
+  requestedFor    DateTime?
+  message         String?
+  createdAt       DateTime      @default(now())
+  events          ViewingEvent[]
+
+  @@index([propertyId, status])
+  @@index([tenantProfileId])
+}
+
+model ViewingEvent {
+  id               String         @id @default(uuid())
+  viewingRequestId String
+  viewingRequest   ViewingRequest @relation(fields: [viewingRequestId], references: [id], onDelete: Cascade)
+  startsAt         DateTime
+  instructions     String?
+  createdAt        DateTime       @default(now())
+}
+
+model Offer {
+  id              String        @id @default(uuid())
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+  amountPcm       Int
+  moveInDate      DateTime?
+  message         String?
+  status          OfferStatus   @default(SUBMITTED)
+  createdAt       DateTime      @default(now())
+
+  @@index([propertyId, status])
+}
+
+model SavedProperty {
+  id              String        @id @default(uuid())
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([tenantProfileId, propertyId])
+}
+
+model ReferencingProfile {
+  id              String              @id @default(uuid())
+  tenantProfileId String              @unique
+  tenantProfile   TenantProfile       @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+  status          VerificationStatus  @default(NOT_STARTED)
+  currentStep     Int                 @default(0)
+  completedAt     DateTime?
+  addressHistory  AddressHistory[]
+  employment      EmploymentRecord[]
+  checks          VerificationCheck[]
+}
+
+model AddressHistory {
+  id                    String             @id @default(uuid())
+  referencingProfileId  String
+  referencingProfile    ReferencingProfile @relation(fields: [referencingProfileId], references: [id], onDelete: Cascade)
+  address               String
+  postcode              String
+  fromDate              DateTime
+  toDate                DateTime?
+}
+
+model EmploymentRecord {
+  id                    String             @id @default(uuid())
+  referencingProfileId  String
+  referencingProfile    ReferencingProfile @relation(fields: [referencingProfileId], references: [id], onDelete: Cascade)
+  employer              String
+  role                  String
+  sector                String
+  incomePence           Int
+  startDate             DateTime
+}
+
+model VerificationCheck {
+  id                    String             @id @default(uuid())
+  referencingProfileId  String
+  referencingProfile    ReferencingProfile @relation(fields: [referencingProfileId], references: [id], onDelete: Cascade)
+  provider              String
+  type                  String
+  status                VerificationStatus
+  result                Json?
+  createdAt             DateTime           @default(now())
+}
+
+model RiskAssessment {
+  id              String        @id @default(uuid())
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id], onDelete: Cascade)
+  grade           String
+  score           Int
+  reasons         Json
+  createdAt       DateTime      @default(now())
+}
+
+model Tenancy {
+  id          String   @id @default(uuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  rentPcm     Int
+  aptSignedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model Deal {
+  id                  String   @id @default(uuid())
+  propertyId          String   @unique
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  acceptedOfferId     String?
+  applicantName       String
+  agreedRentPcm       Int
+  agreedMoveDate      DateTime
+  status              String   @default("ACTIVE")
+  referencingStatus   String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  changes   Json?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([entity, entityId])
+}
+
+model SystemEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
+model PhotographerRequest {
+  id              String   @id @default(uuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  propertyAddress String
+  contactName     String
+  phone           String
+  email           String
+  preferredDates  String
+  notes           String?
+  createdAt       DateTime @default(now())
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  url       String
+  name      String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  propertyDocuments PropertyDocument[]
+}
