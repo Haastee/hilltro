@@ -126,11 +126,11 @@ export function FaqPage() {
 }
 
 export function PrivacyPage() {
-  return <InfoLanding badge="Privacy Policy" title="Privacy built for sensitive rental journeys." body="Hilltro is designed around identity, referencing, banking and tenancy data. Final legal privacy wording should be reviewed before launch." />;
+  return <InfoLanding badge="Privacy Policy" title="Privacy built for sensitive rental journeys." body="Hilltro is designed around identity, referencing, banking and tenancy data, with clear controls for profile information, uploaded documents and tenancy records." />;
 }
 
 export function OfferTermsPage() {
-  return <InfoLanding badge="Offer Terms" title="Offer terms for structured rental applications." body="This placeholder will hold the final offer submission terms, expiry rules, applicant confirmations and landlord response rules before launch." />;
+  return <InfoLanding badge="Offer Terms" title="Offer terms for structured rental applications." body="Hilltro structures rental offers with applicant confirmations, landlord responses, expiry windows and APT progression steps so both sides understand the status of an application." />;
 }
 
 export function ContactPage() {
@@ -160,7 +160,7 @@ function InfoLanding({ badge, title, body }: { badge: string; title: string; bod
 export function TermsPage() {
   return (
     <main className="page">
-      <section className="hero compact-hero"><p className="badge orange">Legal</p><h1>Hilltro Terms & Conditions.</h1><p>This placeholder structure will be replaced with final legal terms before launch.</p></section>
+      <section className="hero compact-hero"><p className="badge orange">Legal</p><h1>Hilltro Terms & Conditions.</h1><p>These terms explain the expected standards for using Hilltro to search, reference, list, offer, message and progress residential tenancies.</p></section>
       <section className="grid cols-2">
         <article className="card"><h3>Platform use</h3><p className="muted">Users agree to provide accurate information and use Hilltro workflows for legitimate rental activity only.</p></article>
         <article className="card"><h3>Verification and payments</h3><p className="muted">Identity, referencing, Open Banking, payment and APT signing services will be governed by final provider terms.</p></article>
