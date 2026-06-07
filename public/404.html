@@ -8,7 +8,7 @@
       (function () {
         var locationObject = window.location;
         sessionStorage.setItem("hilltro.github-pages.redirect", locationObject.href);
-        locationObject.replace(locationObject.protocol + "//" + locationObject.host + "/");
+        locationObject.replace(locationObject.protocol + "//" + locationObject.host + "/?spa-redirect=" + Date.now());
       })();
     </script>
   </head>
