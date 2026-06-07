@@ -17,7 +17,7 @@ export function PropertyFloorplanPage() {
       </section>
       <section className="card floorplan-viewer">
         {floorplan ? <img src={floorplan} alt="Property floorplan" /> : <div className="dropzone"><div><b>No floorplan uploaded</b><p className="muted">Floorplans help tenants understand layout before booking a viewing.</p></div></div>}
-        {editing && <div className="hero-actions"><button className="btn primary" onClick={() => { setFloorplan(assetUrl("assets/hero-product.png")); setEditing(false); }}>Upload</button><button className="btn" disabled={!floorplan} onClick={() => setFloorplan("")}>Delete</button><button className="btn" onClick={() => setFloorplan(assetUrl("assets/hero-product.png"))}>Replace</button></div>}
+        {editing && <div className="hero-actions"><button className="btn primary" onClick={() => { setFloorplan(assetUrl("assets/floorplans/hilltro-floorplan.svg")); setEditing(false); }}>Upload</button><button className="btn" disabled={!floorplan} onClick={() => setFloorplan("")}>Delete</button><button className="btn" onClick={() => setFloorplan(assetUrl("assets/floorplans/hilltro-floorplan.svg"))}>Replace</button></div>}
       </section>
     </main>
   );

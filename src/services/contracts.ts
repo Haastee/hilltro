@@ -6,11 +6,12 @@ export type SearchFilters = {
   minPrice?: number;
   bedrooms?: number;
   propertyType?: string;
+  radiusMiles?: number;
 };
 
 export interface AuthService {
   currentUser(): Promise<User | null>;
-  register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"] }): Promise<User>;
+  register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<User>;
   login(email: string, password: string): Promise<User>;
   logout(): Promise<void>;
 }

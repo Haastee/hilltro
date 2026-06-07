@@ -53,7 +53,7 @@ const placeLocations: UkLocation[] = [
 ];
 
 const postcodeDistricts = [
-  "W2", "W4", "W8", "W11", "W14", "SW1", "SW1A", "SW3", "SW7", "SW10",
+  "W1G", "W1K", "W2", "W4", "W8", "W11", "W14", "SW1", "SW1A", "SW1X", "SW3", "SW7", "SW10",
   "NW1", "NW3", "N1", "N5", "TW9", "SE1", "SE10", "E1", "E8", "E14",
   "M1", "M2", "M3", "M4", "M20", "M50", "B1", "B5", "B13", "B15",
   "L1", "L2", "L8", "LS1", "LS6", "LS7", "BS1", "BS6", "BS8",

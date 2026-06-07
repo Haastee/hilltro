@@ -1,6 +1,6 @@
-# Haaste Rental Operating System
+# Hilltro Rental Operating System
 
-Haaste is now a single React + TypeScript + Vite application with an Express backend and PostgreSQL/Prisma data model. The old static HTML/CSS/JavaScript prototype has been removed; `index.html` only boots the React app.
+Hilltro is now a single React + TypeScript + Vite application with an Express backend and PostgreSQL/Prisma data model. The old static HTML/CSS/JavaScript prototype has been removed; `index.html` only boots the React app.
 
 ## Stack
 
@@ -8,13 +8,13 @@ Haaste is now a single React + TypeScript + Vite application with an Express bac
 - Design system: `src/design/tokens.css`
 - Backend: Express in `server/index.ts`
 - Database: PostgreSQL with Prisma in `prisma/schema.prisma`
-- Seed data: 100 UK demo properties plus demo tenant/landlord accounts
+- Seed data: 10 public QA listings assigned to the dedicated demo landlord account, plus local demo auth data
 - Services: typed contracts in `src/services/contracts.ts`, API adapters in `src/services/apiServices.ts`, local demo mode in `src/services/localServices.ts`
 
 ## Local Setup
 
 ```bash
-cd /Users/princehalfcut/Documents/Haaste
+cd /Users/princehalfcut/Documents/Hilltro
 npm install
 cp .env.example .env
 npm run prisma:generate
@@ -40,11 +40,10 @@ Open:
 http://localhost:5173
 ```
 
-Demo accounts after seeding:
+Local demo landlord account:
 
 ```text
-tenant@haaste.test / Password123!
-landlord@haaste.test / Password123!
+landlord.demo@hilltro.com / Hilltro!234
 ```
 
 ## React Routes
@@ -52,7 +51,7 @@ landlord@haaste.test / Password123!
 - `/` public marketplace home
 - `/search` structured UK property search
 - `/properties/:id` protected-address property detail and viewing request flow
-- `/about`, `/pricing`, `/faq`
+- `/about`, `/faq`
 - `/register`, `/login`
 - `/tenant`, `/tenant/saved`, `/tenant/viewings`, `/tenant/offers`, `/tenant/payments`, `/tenant/profile`
 - `/referencing`

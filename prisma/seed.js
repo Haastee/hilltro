@@ -38,12 +38,12 @@ import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 var prisma = new PrismaClient();
 var cities = [
-    ["London", ["Kensington", "Camden", "Richmond", "Islington", "Greenwich", "Hackney"], ["W8", "NW1", "TW9", "N1", "SE10", "E8"], 1850, "/assets/london-apartment-photo.png"],
-    ["Manchester", ["Ancoats", "Northern Quarter", "Deansgate", "Salford Quays"], ["M1", "M4", "M3", "M50"], 1050, "/assets/manchester-flat-photo.png"],
-    ["Birmingham", ["Jewellery Quarter", "Edgbaston", "Moseley", "Digbeth"], ["B1", "B15", "B13", "B5"], 950, "/assets/birmingham-townhouse-photo.png"],
-    ["Bristol", ["Clifton", "Redland", "Harbourside"], ["BS8", "BS6", "BS1"], 1200, "/assets/london-apartment-photo.png"],
-    ["Leeds", ["Headingley", "Chapel Allerton", "City Centre"], ["LS6", "LS7", "LS1"], 900, "/assets/manchester-flat-photo.png"],
-    ["Bath", ["Lansdown", "Widcombe", "Oldfield Park"], ["BA1", "BA2", "BA2"], 1300, "/assets/birmingham-townhouse-photo.png"]
+    ["London", ["Kensington", "Camden", "Richmond", "Islington", "Greenwich", "Hackney"], ["W8", "NW1", "TW9", "N1", "SE10", "E8"], 1850, "/assets/properties/london-apartment-photo.png"],
+    ["Manchester", ["Ancoats", "Northern Quarter", "Deansgate", "Salford Quays"], ["M1", "M4", "M3", "M50"], 1050, "/assets/properties/manchester-flat-photo.png"],
+    ["Birmingham", ["Jewellery Quarter", "Edgbaston", "Moseley", "Digbeth"], ["B1", "B15", "B13", "B5"], 950, "/assets/properties/birmingham-townhouse-photo.png"],
+    ["Bristol", ["Clifton", "Redland", "Harbourside"], ["BS8", "BS6", "BS1"], 1200, "/assets/properties/london-apartment-photo.png"],
+    ["Leeds", ["Headingley", "Chapel Allerton", "City Centre"], ["LS6", "LS7", "LS1"], 900, "/assets/properties/manchester-flat-photo.png"],
+    ["Bath", ["Lansdown", "Widcombe", "Oldfield Park"], ["BA1", "BA2", "BA2"], 1300, "/assets/properties/birmingham-townhouse-photo.png"]
 ];
 var streets = ["High Street", "Church Road", "Albert Road", "Queen Street", "Station Road", "Park Lane", "King Street", "Victoria Road", "Market Street", "Mill Lane"];
 var types = ["Flat", "House", "Studio", "Maisonette"];
@@ -56,25 +56,25 @@ function main() {
                 case 1:
                     passwordHash = _b.sent();
                     return [4 /*yield*/, prisma.user.upsert({
-                            where: { email: "landlord@haaste.test" },
+                            where: { email: "landlord@hilltro.test" },
                             update: {},
                             create: {
-                                email: "landlord@haaste.test",
+                                email: "landlord@hilltro.test",
                                 name: "Landlord Demo",
                                 phone: "+44 7000 111111",
                                 role: UserRole.LANDLORD,
                                 passwordHash: passwordHash,
-                                landlordProfile: { create: { companyName: "Haaste Demo Lets" } }
+                                landlordProfile: { create: { companyName: "Hilltro Demo Lets" } }
                             },
                             include: { landlordProfile: true }
                         })];
                 case 2:
                     landlord = _b.sent();
                     return [4 /*yield*/, prisma.user.upsert({
-                            where: { email: "tenant@haaste.test" },
+                            where: { email: "tenant@hilltro.test" },
                             update: {},
                             create: {
-                                email: "tenant@haaste.test",
+                                email: "tenant@hilltro.test",
                                 name: "Tenant Demo",
                                 phone: "+44 7000 000000",
                                 role: UserRole.TENANT,

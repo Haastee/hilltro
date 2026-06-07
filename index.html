@@ -3,9 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Haaste | Rent in 5 clicks</title>
-    <meta name="description" content="Haaste is a UK rental operating system for search, referencing, offers, APT signing, deposits and rent." />
+    <title>Hilltro | Rent in 5 clicks</title>
+    <meta name="description" content="Hilltro is a UK rental operating system for search, referencing, offers, APT signing, deposits and rent." />
+    <link rel="canonical" href="https://hilltro.com/" />
+    <meta property="og:title" content="Hilltro | Rent in 5 clicks" />
+    <meta property="og:description" content="Hilltro is a UK rental operating system for search, referencing, offers, APT signing, deposits and rent." />
+    <meta property="og:url" content="https://hilltro.com/" />
+    <meta property="og:site_name" content="Hilltro" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://hilltro.com/assets/branding/hilltro-logo.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Hilltro | Rent in 5 clicks" />
+    <meta name="twitter:description" content="Hilltro is a UK rental operating system for search, referencing, offers, APT signing, deposits and rent." />
+    <meta name="twitter:image" content="https://hilltro.com/assets/branding/hilltro-logo.svg" />
     <meta name="theme-color" content="#3d535b" />
+    <link rel="icon" type="image/png" href="%BASE_URL%favicon-light.png?v=hilltro-favicon-3" />
+    <link rel="icon" type="image/png" href="%BASE_URL%favicon-light.png?v=hilltro-favicon-3" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" href="%BASE_URL%favicon-dark.png?v=hilltro-favicon-3" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="%BASE_URL%favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32x32.png" />
@@ -13,9 +27,30 @@
     <link rel="manifest" href="%BASE_URL%site.webmanifest" />
     <script>
       (function () {
-        var redirect = sessionStorage.getItem("haaste.github-pages.redirect");
+        var baseUrl = "%BASE_URL%";
+        var darkQuery = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+        var setFavicon = function () {
+          var preferred = darkQuery && darkQuery.matches ? "favicon-dark.png" : "favicon-light.png";
+          var themedIcon = document.querySelector('link[rel~="icon"][type="image/png"]:not([media])');
+          if (themedIcon) {
+            themedIcon.setAttribute("href", baseUrl + preferred + "?v=hilltro-favicon-3");
+          }
+        };
+        setFavicon();
+        if (darkQuery) {
+          if (darkQuery.addEventListener) {
+            darkQuery.addEventListener("change", setFavicon);
+          } else if (darkQuery.addListener) {
+            darkQuery.addListener(setFavicon);
+          }
+        }
+      })();
+    </script>
+    <script>
+      (function () {
+        var redirect = sessionStorage.getItem("hilltro.github-pages.redirect");
         if (redirect) {
-          sessionStorage.removeItem("haaste.github-pages.redirect");
+          sessionStorage.removeItem("hilltro.github-pages.redirect");
           history.replaceState(null, "", redirect);
         }
       })();

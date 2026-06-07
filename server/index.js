@@ -56,7 +56,7 @@ var jwtSecret = process.env.JWT_SECRET || "development-only-secret";
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.get("/api/health", function (_req, res) {
-    res.json({ ok: true, service: "haaste-api" });
+    res.json({ ok: true, service: "hilltro-api" });
 });
 app.post("/api/auth/register", function (req, res) { return __awaiter(void 0, void 0, void 0, function () {
     var _a, name, email, password, phone, role, passwordHash, user;
@@ -160,5 +160,5 @@ function publicUser(user) {
 }
 var port = Number(process.env.PORT || 8787);
 app.listen(port, function () {
-    console.log("Haaste API listening on http://localhost:".concat(port));
+    console.log("Hilltro API listening on http://localhost:".concat(port));
 });

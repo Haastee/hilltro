@@ -21,7 +21,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "haaste-api" });
+  res.json({ ok: true, service: "hilltro-api" });
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -89,7 +89,7 @@ app.get("/api/properties/:id", async (req, res) => {
     ...property,
     fullAddress: `${property.streetName}, ${property.area}, ${property.city} ${property.postcodeDistrict}`,
     postcode: property.postcodeDistrict,
-    imageUrl: property.images[0]?.url || "/assets/london-apartment-photo.png"
+    imageUrl: property.images[0]?.url || "/assets/properties/london-apartment-photo.png"
   });
 });
 
@@ -131,7 +131,7 @@ app.post("/api/property-drafts", requireUser, async (req, res) => {
       rentPcm: Number(req.body.rentPcm || 0),
       availableFrom: req.body.availableFrom ? new Date(req.body.availableFrom) : new Date(),
       furnishingStatus: req.body.furnishingStatus || "Furnished",
-      description: req.body.description || "Draft listing created in Haaste.",
+      description: req.body.description || "Draft listing created in Hilltro.",
       status: "DRAFT",
       verifiedEnquiriesOnly: true
     }
@@ -140,7 +140,7 @@ app.post("/api/property-drafts", requireUser, async (req, res) => {
     ...property,
     fullAddress: `${property.streetName}, ${property.area}, ${property.city} ${property.postcodeDistrict}`,
     postcode: property.postcodeDistrict,
-    imageUrl: "/assets/london-apartment-photo.png"
+    imageUrl: "/assets/properties/london-apartment-photo.png"
   });
 });
 
@@ -255,5 +255,5 @@ async function requireUser(req: express.Request, res: express.Response, next: ex
 
 const port = Number(process.env.PORT || 8787);
 app.listen(port, () => {
-  console.log(`Haaste API listening on http://localhost:${port}`);
+  console.log(`Hilltro API listening on http://localhost:${port}`);
 });

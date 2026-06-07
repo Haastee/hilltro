@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { CalendarField } from "../../components/CalendarField";
+import { HilltroAvatar } from "../../components/HilltroAvatar";
 import { applicantOffers, interestEvents, managedProperties, type ApplicantOffer } from "../../data/landlordProperties";
 
 type Deal = { applicant: string; rent: number; moveDate: string; status: string; referencing: string; nextSteps: string };
@@ -13,6 +15,7 @@ export function PropertyOffersPage() {
   const [expiredModal, setExpiredModal] = useState<ApplicantOffer | null>(null);
   const [declined, setDeclined] = useState<Set<string>>(new Set());
   const [deal, setDeal] = useState<Deal | null>(null);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [counterOffer, setCounterOffer] = useState<ApplicantOffer | null>(null);
   const tab = params.get("tab") || "offers";
 
@@ -26,6 +29,7 @@ export function PropertyOffersPage() {
       return;
     }
     setDeal({ applicant: offer.applicantName, rent: offer.offerAmount, moveDate: offer.moveInDate, status: "Active Deal", referencing: offer.referencingStatus, nextSteps: "Prepare APT, collect deposit and confirm possession checklist." });
+    setCelebrationOpen(true);
     setDeclined(new Set(offers.filter((item) => item.id !== offer.id).map((item) => item.id)));
     changeTab("deals");
   }
@@ -33,6 +37,7 @@ export function PropertyOffersPage() {
   function submitCounter(input: { rent: number; moveDate: string; notes: string }) {
     if (!counterOffer) return;
     setDeal({ applicant: counterOffer.applicantName, rent: input.rent, moveDate: input.moveDate, status: "Counter Accepted", referencing: counterOffer.referencingStatus, nextSteps: "Tenant accepted the counter offer. Proceed to APT and deposit collection." });
+    setCelebrationOpen(true);
     setDeclined(new Set(offers.filter((item) => item.id !== counterOffer.id).map((item) => item.id)));
     setCounterOffer(null);
     changeTab("deals");
@@ -81,6 +86,17 @@ export function PropertyOffersPage() {
       {tab === "deals" && <DealsTab deal={deal} onReviewOffers={() => changeTab("offers")} />}
 
       {counterOffer && <CounterOfferModal offer={counterOffer} advertisedRent={property.rentPcm} onClose={() => setCounterOffer(null)} onSubmit={submitCounter} />}
+      {celebrationOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="card modal-card success-celebration">
+            <div className="confetti-field" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <span key={index} />)}</div>
+            <span className="badge orange">Deal created</span>
+            <h2>New Tenant Secured!</h2>
+            <p className="muted">The accepted offer has moved into Deals. You can now progress APT, deposit and possession steps.</p>
+            <button className="btn primary" type="button" onClick={() => setCelebrationOpen(false)}>Continue</button>
+          </div>
+        </div>
+      )}
       {expiredModal && (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="card modal-card">
@@ -98,7 +114,7 @@ function ApplicantCard({ offer, propertyRent, expanded, declined, dealActive, on
   return (
     <article className={`applicant-card card ${expanded ? "expanded" : ""}`}>
       <button className="applicant-summary expandable" onClick={onToggle}>
-        <HaasteAvatar name={offer.applicantName} />
+        <HilltroAvatar name={offer.applicantName} />
         <div><h2>{offer.applicantName}</h2><p className="muted">{offer.employmentSector}</p></div>
         <div><span className="label">Offer</span><b>£{offer.offerAmount.toLocaleString("en-GB")}</b></div>
         <div><span className="label">Move-in</span><b>{formatDate(offer.moveInDate)}</b></div>
@@ -115,7 +131,7 @@ function ApplicantCard({ offer, propertyRent, expanded, declined, dealActive, on
         <Countdown expiresAt={offer.expiresAt} />
         <button className="link-button">Extend Offer Window</button>
       </div>
-      {expanded && <div className="applicant-detail"><Detail title="Employment Sector" value={offer.employmentSector} /><Detail title="Affordability Assessment" value={offer.affordabilityAssessment} /><Detail title="Referencing Status" value={offer.referencingStatus} /><Detail title="Address History Summary" value={offer.addressHistorySummary} /><Detail title="Offer Notes" value={offer.offerNotes} /><Detail title="Move Date" value={formatDate(offer.moveInDate)} /><Detail title="Viewing History" value={offer.viewingHistory} /><Detail title="Tenant Passport Summary" value={offer.tenantPassportSummary} /><Detail title="Counter Offer Rule" value={propertyRent < 8333 ? "Counter rent cannot exceed advertised rent for this property." : "High-value exception applies; counter rent may exceed asking rent."} /></div>}
+      {expanded && <div className="applicant-detail"><Detail title="Employment Sector" value={offer.employmentSector} /><Detail title="Affordability Assessment" value={offer.affordabilityAssessment} /><Detail title="Referencing Status" value={offer.referencingStatus} /><Detail title="Address History Summary" value={offer.addressHistorySummary} /><Detail title="Offer Notes" value={offer.offerNotes} /><Detail title="Move Date" value={formatDate(offer.moveInDate)} /><Detail title="Viewing History" value={offer.viewingHistory} /><Detail title="Referencing Summary" value={offer.tenantPassportSummary} /><Detail title="Counter Offer Rule" value={propertyRent < 8333 ? "Counter rent cannot exceed advertised rent for this property." : "High-value exception applies; counter rent may exceed asking rent."} /></div>}
     </article>
   );
 }
@@ -127,11 +143,11 @@ function CounterOfferModal({ offer, advertisedRent, onClose, onSubmit }: { offer
   const overLimit = advertisedRent < 8333 && rent > advertisedRent;
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <form className="card modal-card form-grid" onSubmit={(event) => { event.preventDefault(); if (!overLimit) onSubmit({ rent, moveDate, notes }); }}>
+      <form className="card modal-card form-grid" onSubmit={(event) => { event.preventDefault(); if (!overLimit) onSubmit({ rent, moveDate, notes }); }} noValidate>
         <h2>Counter Offer</h2>
         <p className="muted">Adjust rent, move-in date and notes before sending to {offer.applicantName}.</p>
         <p className="form-note">* Required field</p>
-        <label>Proposed Move-In Date *<input type="date" required value={moveDate} onChange={(event) => setMoveDate(event.target.value)} /></label>
+        <CalendarField label="Proposed Move-In Date *" value={moveDate} onChange={setMoveDate} required />
         <label className={overLimit ? "required-missing" : ""}>Proposed Rent *<input type="number" required value={rent} onChange={(event) => setRent(Number(event.target.value))} />{overLimit && <small>For properties below £8,333 pcm, counter offer rent may not exceed the advertised rent of £{advertisedRent.toLocaleString("en-GB")}.</small>}</label>
         <label>Notes (optional)<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Explain the proposed change to the applicant." /></label>
         <div className="hero-actions"><button className="btn primary" disabled={overLimit}>Send Counter Offer</button><button className="btn" type="button" onClick={onClose}>Cancel</button></div>
@@ -165,5 +181,4 @@ function Countdown({ expiresAt, large = false }: { expiresAt?: string; large?: b
 }
 
 function Detail({ title, value }: { title: string; value: string }) { return <div><span className="label">{title}</span><p>{value}</p></div>; }
-function HaasteAvatar({ name }: { name: string }) { return <div className="haaste-avatar"><span>{name.split(/\s|&/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("")}</span></div>; }
 function formatDate(value: string) { return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)); }

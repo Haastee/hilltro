@@ -1,29 +1,87 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Map, Navigation, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { propertyService } from "../../app/services";
+import { authService } from "../../app/services";
+import { primeCentralListings } from "../../data/properties";
 import { locationSuggestions } from "../../services/postcodesIo";
 import type { Property } from "../../types/domain";
+import { SelectField } from "../../components/SelectField";
 import { PropertyCard } from "./PropertyCard";
+import { filterByPolygon, filterByRadius, locationOrigin, type LatLngPoint } from "../../services/locationService";
+import { readPendingSavedSearch, saveSearch, setPendingSavedSearch } from "../../services/engagementService";
+
+const PropertyMap = lazy(() => import("../../components/map/PropertyMap"));
+
+const bedroomOptions = [
+  { value: "Any", label: "Any beds" },
+  { value: "Studio", label: "Studio" },
+  { value: "1", label: "1 bed" },
+  { value: "2", label: "2 beds" },
+  { value: "3", label: "3 beds" },
+  { value: "4", label: "4 beds" },
+  { value: "5", label: "5+ beds" }
+];
+
+const bathroomOptions = [
+  { value: "Any", label: "Any bathrooms" },
+  { value: "1", label: "1+ bathroom" },
+  { value: "2", label: "2+ bathrooms" },
+  { value: "3", label: "3+ bathrooms" },
+  { value: "4", label: "4+ bathrooms" }
+];
+
+const typeOptions = ["Any", "Flat", "Penthouse", "House", "Maisonette", "Detached House", "Semi-Detached House", "Terraced House", "Bungalow", "Shared Property"].map((value) => ({ value, label: propertyTypeLabel(value) }));
+const furnishingOptions = ["Any", "Furnished", "Part-Furnished", "Unfurnished"].map((value) => ({ value, label: value === "Any" ? "Any furnishing" : value }));
+const availabilityOptions = ["Any", "Now", "This month", "Next month"].map((value) => ({ value, label: value === "Any" ? "Any availability" : value }));
+const radiusOptions = ["Any Radius", "This area only", "Within 1 mile", "Within 3 miles", "Within 5 miles"].map((value) => ({ value, label: value }));
+const priceOptions = buildPriceOptions();
 
 export function SearchPage() {
-  const params = new URLSearchParams(window.location.search);
-  const [filters, setFilters] = useState({ location: params.get("location") || "", maxPrice: params.get("maxPrice") || "", minPrice: "", bedrooms: "Any", propertyType: "Any" });
-  const [results, setResults] = useState<Property[]>([]);
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const pendingSavedSearch = params.get("saveSearch") === "1" ? readPendingSavedSearch() : null;
+  const [filters, setFilters] = useState({
+    location: params.get("location") || pendingSavedSearch?.location || "",
+    maxPrice: params.get("maxPrice") || pendingSavedSearch?.maxPrice || "",
+    minPrice: params.get("minPrice") || pendingSavedSearch?.minPrice || "",
+    bedrooms: pendingSavedSearch?.bedrooms || "Any",
+    bathrooms: pendingSavedSearch?.bathrooms || "Any",
+    propertyType: pendingSavedSearch?.propertyType || "Any",
+    furnishing: pendingSavedSearch?.furnishing || "Any",
+    availability: pendingSavedSearch?.availability || "Any",
+    radius: pendingSavedSearch?.radius || "Any Radius"
+  });
+  const [saveModalOpen, setSaveModalOpen] = useState(params.get("saveSearch") === "1" && Boolean(pendingSavedSearch));
+  const [searchName, setSearchName] = useState(pendingSavedSearch?.location ? `${pendingSavedSearch.location} homes` : "");
+  const [emailAlerts, setEmailAlerts] = useState(true);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [remoteResults, setRemoteResults] = useState<Property[]>([]);
   const [focused, setFocused] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
-  const [boundary, setBoundary] = useState<Array<{ x: number; y: number }>>([]);
-  const [drawApplied, setDrawApplied] = useState(false);
+  const [mapViewOpen, setMapViewOpen] = useState(false);
+  const [draftPolygon, setDraftPolygon] = useState<LatLngPoint[]>([]);
+  const [appliedPolygon, setAppliedPolygon] = useState<LatLngPoint[]>([]);
+  const [visibleMapPolygon, setVisibleMapPolygon] = useState<LatLngPoint[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState("");
   const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; kind: string; region: string }>>([]);
-  const displayedResults = drawApplied ? results.filter((_, index) => index % 3 !== 1) : results;
+  const [floatingActionsVisible, setFloatingActionsVisible] = useState(false);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
+  const filtersRef = useRef<HTMLElement>(null);
+  const mapRef = useRef<HTMLElement>(null);
+  const restoringMapRef = useRef(false);
 
   useEffect(() => {
     propertyService.search({
       location: filters.location,
       minPrice: filters.minPrice ? Number(filters.minPrice) : undefined,
-      maxPrice: filters.maxPrice ? Number(filters.maxPrice) : undefined,
+      maxPrice: filters.maxPrice && !filters.maxPrice.endsWith("+") ? Number(filters.maxPrice) : undefined,
       bedrooms: filters.bedrooms === "Studio" || filters.bedrooms === "Any" ? 0 : Number(filters.bedrooms),
-      propertyType: filters.propertyType
-    }).then(setResults);
-    setDrawApplied(false);
+      propertyType: filters.propertyType,
+      radiusMiles: radiusMiles(filters.radius)
+    }).then(setRemoteResults).catch(() => setRemoteResults([]));
+    setAppliedPolygon([]);
+    setDraftPolygon([]);
   }, [filters]);
 
   useEffect(() => {
@@ -32,63 +90,357 @@ export function SearchPage() {
       locationSuggestions(filters.location).then((items) => {
         if (alive) setSuggestions(items);
       });
-    }, 180);
+    }, 120);
     return () => {
       alive = false;
       window.clearTimeout(id);
     };
   }, [filters.location]);
 
-  function markBoundary(event: MouseEvent<HTMLDivElement>) {
-    if (!drawMode) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setBoundary([...boundary, { x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }]);
+  useEffect(() => {
+    function updateFloatingActions() {
+      if (restoringMapRef.current) return;
+      const filterBottom = filtersRef.current?.getBoundingClientRect().bottom ?? 999;
+      const mapBottom = mapRef.current?.getBoundingClientRect().bottom ?? 999;
+      setFloatingActionsVisible(filterBottom < 0 || window.scrollY > 520);
+      setMapCollapsed(mapViewOpen && mapBottom < 120);
+    }
+    updateFloatingActions();
+    window.addEventListener("scroll", updateFloatingActions, { passive: true });
+    window.addEventListener("resize", updateFloatingActions);
+    return () => {
+      window.removeEventListener("scroll", updateFloatingActions);
+      window.removeEventListener("resize", updateFloatingActions);
+    };
+  }, [mapViewOpen]);
+
+  const baseResults = useMemo(() => {
+    const combined = mergeProperties(remoteResults, primeCentralListings);
+    const radius = radiusMiles(filters.radius);
+    const origin = locationOrigin(combined, filters.location);
+    const locationFiltered = radius > 0 ? filterByRadius(combined, origin, radius) : combined.filter((property) => matchesLocation(property, filters.location));
+    return locationFiltered
+      .filter((property) => matchesSearchArea(property, filters.location, radius, origin))
+      .filter((property) => property.rentPcm >= (Number(filters.minPrice) || 0))
+      .filter((property) => !filters.maxPrice || filters.maxPrice.endsWith("+") || property.rentPcm <= Number(filters.maxPrice))
+      .filter((property) => filters.bedrooms === "Any" || (filters.bedrooms === "Studio" ? property.bedrooms === 1 : property.bedrooms >= Number(filters.bedrooms)))
+      .filter((property) => filters.bathrooms === "Any" || property.bathrooms >= Number(filters.bathrooms))
+      .filter((property) => filters.propertyType === "Any" || property.type === filters.propertyType || (filters.propertyType === "House" && property.type.includes("House")))
+      .filter((property) => filters.furnishing === "Any" || property.furnishingStatus === filters.furnishing)
+      .filter((property) => filters.availability === "Any" || availabilityMatches(property.availableFrom, filters.availability));
+  }, [remoteResults, filters]);
+
+  const results = useMemo(() => filterByPolygon(baseResults, appliedPolygon), [baseResults, appliedPolygon]);
+  const radius = radiusMiles(filters.radius);
+  const radiusOrigin = useMemo(() => locationOrigin(mergeProperties(remoteResults, primeCentralListings), filters.location), [remoteResults, filters.location]);
+  const filtersAreActive = Boolean(
+    filters.location.trim() ||
+    filters.minPrice ||
+    filters.maxPrice ||
+    filters.bedrooms !== "Any" ||
+    filters.bathrooms !== "Any" ||
+    filters.propertyType !== "Any" ||
+    filters.furnishing !== "Any" ||
+    filters.availability !== "Any" ||
+    filters.radius !== "Any Radius" ||
+    appliedPolygon.length >= 3
+  );
+
+  function chooseSuggestion(item: { name: string }) {
+    setFilters((current) => ({ ...current, location: item.name }));
+    setFocused(false);
+    setSuggestions([]);
+  }
+
+  function selectProperty(propertyId: string) {
+    setSelectedProperty(propertyId);
+    document.getElementById(`property-result-${propertyId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function reopenFilters() {
+    filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function reopenMap() {
+    if (!mapViewOpen) {
+      setMapViewOpen(true);
+      window.setTimeout(() => mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      return;
+    }
+    restoringMapRef.current = true;
+    setMapCollapsed(false);
+    window.setTimeout(() => {
+      mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => {
+        restoringMapRef.current = false;
+      }, 700);
+    }, 40);
+  }
+
+  const serialisedFilters = {
+    location: filters.location,
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    bedrooms: filters.bedrooms,
+    bathrooms: filters.bathrooms,
+    propertyType: filters.propertyType,
+    furnishing: filters.furnishing,
+    availability: filters.availability,
+    radius: filters.radius
+  };
+
+  async function startSaveSearch() {
+    if (!hasSaveableCriteria(serialisedFilters)) {
+      setSaveNotice("Please select at least one filter or search area before saving.");
+      return;
+    }
+    const user = await authService.currentUser();
+    if (!user) {
+      setPendingSavedSearch(serialisedFilters);
+      const next = encodeURIComponent("/search?saveSearch=1");
+      navigate(`/register?next=${next}`);
+      return;
+    }
+    setSaveModalOpen(true);
+  }
+
+  async function confirmSaveSearch() {
+    const user = await authService.currentUser();
+    saveSearch({ name: searchName.trim() || suggestedSearchName(filters), filters: serialisedFilters, emailAlerts }, user?.id);
+    setSaveModalOpen(false);
+    setSaveNotice("Search saved. Email alert settings are ready for future notification workflows.");
   }
 
   return (
-    <main className="page">
-      <section className="hero">
-        <p className="badge orange">Property search</p>
-        <h1>Browse verified-ready homes.</h1>
-        <p>Search by postcode, district, city, town, borough, area or neighbourhood. Exact addresses stay private until viewing approval.</p>
-      </section>
-      <section className="search-panel">
-        <label className="autocomplete-wrap">Location (optional)
-          <input value={filters.location} onFocus={() => setFocused(true)} onBlur={() => window.setTimeout(() => setFocused(false), 140)} onChange={(event) => { setFocused(true); setFilters({ ...filters, location: event.target.value }); }} placeholder="London, Kensington, W8, SW1A, M1" />
-          {(focused || filters.location.length > 0) && suggestions.length > 0 && (
-            <div className="autocomplete-menu" role="listbox">
-              {suggestions.map((item) => (
-                <button type="button" key={item.id} onMouseDown={() => setFilters({ ...filters, location: item.name })}>
-                  <strong>{item.name}</strong><span>{item.kind.replace(/([A-Z])/g, " $1")} · {item.region}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </label>
-        <label>Min rent (optional)<input type="number" value={filters.minPrice} onChange={(event) => setFilters({ ...filters, minPrice: event.target.value })} /></label>
-        <label>Max rent (optional)<input type="number" value={filters.maxPrice} onChange={(event) => setFilters({ ...filters, maxPrice: event.target.value })} /></label>
-        <label>Bedrooms (optional)<select value={filters.bedrooms} onChange={(event) => setFilters({ ...filters, bedrooms: event.target.value })}><option>Any</option><option>Studio</option><option value="1">1 Bedroom</option><option value="2">2 Bedrooms</option><option value="3">3 Bedrooms</option><option value="4">4 Bedrooms</option><option value="5">5 Bedrooms</option><option value="6">5+ Bedrooms</option></select></label>
-        <label>Type (optional)<select value={filters.propertyType} onChange={(event) => setFilters({ ...filters, propertyType: event.target.value })}><option>Any</option><option>Flat</option><option>Penthouse</option><option>House</option><option>Maisonette</option><option>Detached House</option><option>Semi-Detached House</option><option>Terraced House</option><option>Bungalow</option></select></label>
-        <button className="btn primary" onClick={() => setDrawMode(true)}>Search Properties</button>
-      </section>
-      <section className="draw-search card">
+    <main className="search-page">
+      <section className="search-hero">
         <div>
-          <h2>Draw Search Area</h2>
-          <p className="muted">Use the map to mark a custom search boundary, then apply it to the current results.</p>
-        </div>
-        <div className={`mock-map ${drawMode ? "drawing" : ""}`} onClick={markBoundary}>
-          <span>Map preview</span>
-          {boundary.map((point, index) => <i key={`${point.x}-${point.y}`} style={{ left: `${point.x}%`, top: `${point.y}%` }}>{index + 1}</i>)}
-        </div>
-        <div className="hero-actions">
-          <button className="btn" onClick={() => { setDrawMode(true); setBoundary([]); setDrawApplied(false); }}>Draw area</button>
-          <button className="btn primary" disabled={boundary.length < 3} onClick={() => setDrawApplied(true)}>Apply drawn area</button>
+          <p className="eyebrow">Property search</p>
+          <h1>{filters.location ? `Properties to rent in ${filters.location}.` : "Search properties to rent."}</h1>
+          <p>Search by postcode, district, borough, area or neighbourhood. Exact addresses stay protected until the right stage of the viewing process.</p>
         </div>
       </section>
-      <section className="results-summary"><b>{displayedResults.length}</b> homes matched. Homes up to 15% above budget are included with a clear label.</section>
-      <section className="grid cols-3">
-        {displayedResults.map((property) => <PropertyCard key={property.id} property={property} />)}
+
+      <section className="premium-search" ref={filtersRef}>
+        <div className="filter-location-row">
+          <div className="search-input-wrap">
+            <label>Where</label>
+            <div className="search-input-shell">
+              <Search size={22} />
+              <input
+                value={filters.location}
+                onFocus={() => setFocused(true)}
+                onBlur={() => window.setTimeout(() => setFocused(false), 180)}
+                onChange={(event) => {
+                  setFocused(true);
+                  setFilters({ ...filters, location: event.target.value });
+                }}
+                placeholder="Kensington, Chelsea, W8, SW3"
+              />
+            </div>
+            {focused && suggestions.length > 0 && (
+              <div className="autocomplete-menu premium-autocomplete" role="listbox">
+                {suggestions.map((item) => (
+                  <button type="button" key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSuggestion(item)}>
+                    <strong>{item.name}</strong>
+                    <span>{item.kind.replace(/([A-Z])/g, " $1")} · {item.region}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="btn primary search-submit">Search properties</button>
+        </div>
+        <div className="filter-controls-row">
+          <SelectField label="Minimum price" value={filters.minPrice} options={priceOptions} searchable compactMenu initialScrollValue="2000" className="price-select" onChange={(value) => setFilters({ ...filters, minPrice: value })} />
+          <SelectField label="Maximum price" value={filters.maxPrice} options={priceOptions} searchable compactMenu initialScrollValue="3000" className="price-select" onChange={(value) => setFilters({ ...filters, maxPrice: value })} />
+          <SelectField label="Bedrooms" value={filters.bedrooms} options={bedroomOptions} onChange={(value) => setFilters({ ...filters, bedrooms: value })} />
+          <SelectField label="Bathrooms" value={filters.bathrooms} options={bathroomOptions} onChange={(value) => setFilters({ ...filters, bathrooms: value })} />
+          <SelectField label="Property type" value={filters.propertyType} options={typeOptions} onChange={(value) => setFilters({ ...filters, propertyType: value })} />
+          <SelectField label="Furnishing" value={filters.furnishing} options={furnishingOptions} onChange={(value) => setFilters({ ...filters, furnishing: value })} />
+          <SelectField label="Availability" value={filters.availability} options={availabilityOptions} onChange={(value) => setFilters({ ...filters, availability: value })} />
+          <SelectField label="Search radius" value={filters.radius} options={radiusOptions} onChange={(value) => setFilters({ ...filters, radius: value })} />
+        </div>
+      </section>
+
+      <section className="search-view-toolbar">
+        <div>
+          <p className="eyebrow">List View</p>
+          <span>{results.length} matching properties. Use map view only when you want to draw or search a location visually.</span>
+          {saveNotice && <span className="save-search-notice">{saveNotice}</span>}
+        </div>
+        <button className="btn tertiary save-search-button" type="button" onClick={startSaveSearch}><Star size={17} /> Save Search</button>
+        <button className="btn secondary map-view-button" type="button" onClick={reopenMap}>
+          <Map size={18} /> Map View <b>{results.length}</b>
+        </button>
+      </section>
+
+      {saveModalOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="card modal-card form-grid">
+            <p className="eyebrow">Save search</p>
+            <h2>Name this search.</h2>
+            <label>Search name *<input value={searchName} onChange={(event) => setSearchName(event.target.value)} placeholder={suggestedSearchName(filters)} /></label>
+            <label className="checkbox-row"><input type="checkbox" checked={emailAlerts} onChange={(event) => setEmailAlerts(event.target.checked)} /><span>Enable email alerts for matching properties.</span></label>
+            <div className="hero-actions">
+              <button className="btn primary" type="button" onClick={confirmSaveSearch}>Save Search</button>
+              <button className="btn" type="button" onClick={() => setSaveModalOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mapViewOpen && (
+        <section className={`map-view-overlay ${mapCollapsed ? "collapsed-map-view" : ""}`} aria-label="Full property map view" ref={mapRef}>
+          <div className="map-view-header">
+            <div><p className="eyebrow">Map View</p><h2>{results.length} mapped properties</h2></div>
+            <button className="btn secondary" onClick={() => setMapViewOpen(false)}><X size={18} /> List View</button>
+          </div>
+          <div className="premium-map real-map full-map-view">
+            <Suspense fallback={<div className="map-loading">Loading map...</div>}>
+              <PropertyMap
+                properties={results}
+                selectedPropertyId={selectedProperty}
+                onSelectProperty={selectProperty}
+                drawing={drawMode}
+                polygon={draftPolygon}
+                onPolygonChange={setDraftPolygon}
+                radiusOrigin={radiusOrigin}
+                radiusMiles={radius}
+                onBoundsChange={setVisibleMapPolygon}
+              />
+            </Suspense>
+          </div>
+          <div className="map-actions">
+            <button className="btn secondary" onClick={() => { setDrawMode(true); setDraftPolygon([]); setAppliedPolygon([]); }}><Navigation size={17} /> Draw search area</button>
+            <button className="btn secondary" disabled={visibleMapPolygon.length < 3} onClick={() => { setAppliedPolygon(visibleMapPolygon); setDrawMode(false); }}>Search visible map area</button>
+            <button className="btn primary" disabled={draftPolygon.length < 3} onClick={() => { setAppliedPolygon(draftPolygon); setDrawMode(false); }}>Search drawn area</button>
+            {(draftPolygon.length > 0 || appliedPolygon.length > 0) && <button className="btn tertiary" onClick={() => { setDrawMode(false); setDraftPolygon([]); setAppliedPolygon([]); }}><X size={17} /> Clear area</button>}
+          </div>
+          <p className="map-note">{appliedPolygon.length >= 3 ? `${results.length} matching properties inside the drawn search area.` : drawMode ? "Click the map to draw a custom search area. Add at least three points, then search drawn area." : `${results.length} mapped properties. OpenStreetMap tiles are loaded lazily when the map appears.`}</p>
+        </section>
+      )}
+
+      {floatingActionsVisible && (
+        <div className="floating-search-actions" aria-label="Search quick actions">
+          <button className="floating-search-pill" type="button" onClick={reopenFilters}><SlidersHorizontal size={17} /> Filters</button>
+          <button className="floating-search-pill" type="button" onClick={reopenMap}><Map size={17} /> Map View</button>
+        </div>
+      )}
+
+      <section className="search-layout list-first-layout">
+        <section className="results-column">
+          <div className="results-heading">
+            <div>
+              <p className="eyebrow">{filtersAreActive ? "Filtered Properties" : "All Properties"}</p>
+              <h2>{results.length} properties to rent</h2>
+            </div>
+            {appliedPolygon.length >= 3 && <span className="badge orange">Drawn area applied</span>}
+          </div>
+          <div className="property-results-list">
+            {results.map((property) => <div id={`property-result-${property.id}`} className={selectedProperty === property.id ? "selected-result" : ""} key={property.id} onMouseEnter={() => setSelectedProperty(property.id)}><PropertyCard property={property} /></div>)}
+          </div>
+        </section>
       </section>
     </main>
   );
+}
+
+function mergeProperties(primary: Property[], local: Property[]) {
+  const seen = new Set<string>();
+  return [...local, ...primary].filter((property) => {
+    if (seen.has(property.id)) return false;
+    seen.add(property.id);
+    return true;
+  });
+}
+
+function matchesLocation(property: Property, location: string) {
+  const query = location.trim().toLowerCase();
+  if (!query) return true;
+  return [property.fullAddress, property.streetName, property.area, property.city, property.postcodeDistrict, property.postcode]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
+function radiusMiles(value: string) {
+  if (value.includes("5")) return 5;
+  if (value.includes("3")) return 3;
+  if (value.includes("1")) return 1;
+  return 0;
+}
+
+function buildPriceOptions() {
+  const values = [
+    0,
+    ...range(100, 1500, 100),
+    ...range(2000, 10000, 500),
+    ...range(15000, 100000, 5000)
+  ];
+  return [
+    ...values.map((value) => value === 0 ? { value: "", label: "Any Price" } : { value: String(value), label: `${formatCurrency(value)} pcm` }),
+    { value: "100000+", label: "£100,000+ pcm" }
+  ];
+}
+
+function range(start: number, end: number, step: number) {
+  const values = [];
+  for (let value = start; value <= end; value += step) values.push(value);
+  return values;
+}
+
+function formatCurrency(value: number) {
+  return `£${value.toLocaleString("en-GB")}`;
+}
+
+function suggestedSearchName(filters: { location: string; propertyType: string }) {
+  if (filters.location && filters.propertyType !== "Any") return `${filters.propertyType} near ${filters.location}`;
+  if (filters.location) return `${filters.location} homes`;
+  if (filters.propertyType !== "Any") return `${filters.propertyType} search`;
+  return "My Hilltro search";
+}
+
+function hasSaveableCriteria(filters: Record<string, string>) {
+  return Object.entries(filters).some(([key, value]) => {
+    if (!value) return false;
+    if (["Any", "Any Radius"].includes(value)) return false;
+    if (key === "radius" && value === "This area only") return false;
+    return true;
+  });
+}
+
+function availabilityMatches(value: string, filter: string) {
+  if (filter === "Any") return true;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return filter === "Now";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (filter === "Now") return date <= today;
+  const endOfThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  if (filter === "This month") return date <= endOfThisMonth;
+  const startNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const endNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  return date >= startNextMonth && date <= endNextMonth;
+}
+
+function propertyTypeLabel(value: string) {
+  const icons: Record<string, string> = {
+    Any: "All types",
+    Flat: "▣ Flat",
+    Penthouse: "▤ Penthouse",
+    House: "⌂ House",
+    Maisonette: "▥ Maisonette",
+    "Detached House": "⌂ Detached House",
+    "Semi-Detached House": "⌂ Semi-Detached House",
+    "Terraced House": "▥ Terraced House",
+    Bungalow: "⌂ Bungalow",
+    "Shared Property": "◐ Shared Property"
+  };
+  return icons[value] || value;
+}
+
+function matchesSearchArea(property: Property, location: string, radius: number, origin: { latitude: number; longitude: number } | null) {
+  if (radius > 0 && origin && property.latitude && property.longitude) return true;
+  return matchesLocation(property, location);
 }

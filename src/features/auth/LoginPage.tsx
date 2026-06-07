@@ -1,32 +1,42 @@
 import { FormEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
 import { authService } from "../../app/services";
 import type { User } from "../../types/domain";
+import { FloatingInput } from "../../components/FloatingField";
 
 export function LoginPage({ onAuth }: { onAuth: (user: User) => void }) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [email, setEmail] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
-  const [passwordValue, setPasswordValue] = useState("");
-  const [touched, setTouched] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
+  function continueToPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (!email.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    setStep(2);
+    window.setTimeout(() => passwordRef.current?.focus(), 80);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setTouched(true);
     setError("");
     setSuccess("");
-    const form = new FormData(event.currentTarget);
-    const email = String(form.get("email"));
-    const password = String(form.get("password"));
-    if (!email.includes("@") || password.length < 8) {
-      setError("Enter a valid email and your full password.");
+    if (passwordValue.length < 8) {
+      setError("Enter your full password.");
       return;
     }
     setLoading(true);
     try {
-      const user = await authService.login(email, password);
+      const user = await authService.login(email, passwordValue);
       setSuccess("Signed in. Opening your workspace...");
       onAuth(user);
       window.setTimeout(() => navigate(user.role === "LANDLORD" ? "/landlord" : "/tenant"), 280);
@@ -40,22 +50,38 @@ export function LoginPage({ onAuth }: { onAuth: (user: User) => void }) {
   }
 
   return (
-    <main className="page auth-page">
-      <section className="auth-shell">
-        <div className="auth-copy">
-          <p className="badge orange">Secure access</p>
+    <main className="auth-page premium-auth-page">
+      <section className="auth-shell premium-auth-shell">
+        <div className="auth-copy premium-auth-copy">
+          <p className="eyebrow">Secure access</p>
           <h1>Welcome back.</h1>
-          <p>Sign in to continue referencing, payments, APT signing and property operations inside Haaste.</p>
+          <p>Sign in to find, rent, and manage. All in one place.</p>
+          <div className="auth-progress"><span style={{ width: step === 1 ? "50%" : "100%" }} /></div>
         </div>
-        <form className={`card form-grid auth-card ${error ? "shake" : ""}`} onSubmit={submit}>
-          <p className="form-note">* Required field</p>
-          <label>Email *<input className={touched && error ? "field-error" : ""} name="email" type="email" autoComplete="email" required /></label>
-          <label>Password *<input ref={passwordRef} className={touched && error ? "field-error" : ""} name="password" type="password" autoComplete="current-password" required value={passwordValue} onChange={(event) => setPasswordValue(event.target.value)} /></label>
-          <div className="form-row"><Link to="/forgot-password">Forgot Password?</Link><Link className="strong-link" to="/register">Don't have an account? Sign Up</Link></div>
-          {error && <p className="notice error">{error}</p>}
-          {success && <p className="notice success">{success}</p>}
-          <button className="btn primary" disabled={loading}>{loading ? "Checking..." : "Log in"}</button>
-        </form>
+
+        {step === 1 && (
+          <form className="auth-card premium-auth-card" onSubmit={continueToPassword} noValidate>
+            <p className="form-note">Step 1 of 2</p>
+            <h2>Your email address</h2>
+            <FloatingInput label="Email *" name="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} trailing={<Mail size={18} />} />
+            {error && <p className="notice error">{error}</p>}
+            <button className="btn primary" type="submit">Continue <ArrowRight size={18} /></button>
+            <p className="muted">No account yet? <Link className="strong-link" to="/register">Create one</Link></p>
+          </form>
+        )}
+
+        {step === 2 && (
+          <form className="auth-card premium-auth-card" onSubmit={submit} noValidate>
+            <p className="form-note">Step 2 of 2</p>
+            <h2>Your password</h2>
+            <p className="muted auth-email-preview">{email}</p>
+            <FloatingInput label="Password *" ref={passwordRef} name="password" type="password" autoComplete="current-password" required value={passwordValue} onChange={(event) => setPasswordValue(event.target.value)} trailing={<LockKeyhole size={18} />} />
+            <div className="form-row"><button className="btn tertiary" type="button" onClick={() => setStep(1)}>Back</button><Link to="/forgot-password">Forgot password?</Link></div>
+            {error && <p className="notice error">{error}</p>}
+            {success && <p className="notice success">{success}</p>}
+            <button className="btn primary" disabled={loading}>{loading ? "Checking..." : "Log in"}</button>
+          </form>
+        )}
       </section>
     </main>
   );

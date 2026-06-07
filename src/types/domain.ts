@@ -9,6 +9,7 @@ export type User = {
   email: string;
   role: Role;
   phone?: string;
+  profileImageUrl?: string;
 };
 
 export type Property = {
@@ -28,16 +29,53 @@ export type Property = {
   furnishingStatus: string;
   description: string;
   imageUrl: string;
+  imageUrls?: string[];
+  floorplanUrl?: string;
+  videoUrl?: string;
+  videoProvider?: string;
+  videoThumbnailUrl?: string;
+  features?: string[];
+  latitude?: number;
+  longitude?: number;
   status: "DRAFT" | "REVIEW" | "LIVE" | "LET";
   verifiedEnquiriesOnly: boolean;
   slightlyAboveBudget?: boolean;
+  landlordId?: string;
 };
 
 export type Conversation = {
   id: string;
   subject: string;
   unreadCount: number;
+  propertyId?: string;
+  landlordId?: string;
+  applicantId?: string;
   messages: Message[];
+};
+
+export type LandlordProfile = {
+  id: string;
+  userId: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  displayName: string;
+  profilePhotoUrl?: string;
+  bio?: string;
+  landlordType: "Private Landlord" | "Professional Landlord";
+  propertiesCount: number;
+};
+
+export type ApplicantProfile = {
+  id: string;
+  name: string;
+  profileImageUrl?: string;
+  affordabilityPcm?: number;
+  referencingStatus: string;
+  employmentStatus: string;
+  moveDate?: string;
+  occupants?: string;
+  pets?: string;
 };
 
 export type Message = {

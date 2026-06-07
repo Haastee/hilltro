@@ -18,8 +18,8 @@ export function PhotographyPage() {
   }
   return (
     <main className="page">
-      <section className="hero"><h1>Book Photography with Haaste.</h1><p>Request professional photography for your listing. A member of the Haaste photography team will contact you shortly.</p></section>
-      <form className="card form-grid" onSubmit={submit} style={{ maxWidth: 760, margin: "0 auto" }}>
+      <section className="hero"><h1>Book Photography with Hilltro.</h1><p>Request professional photography for your listing. A member of the Hilltro photography team will contact you shortly.</p></section>
+      <form className="card form-grid" onSubmit={submit} style={{ maxWidth: 760, margin: "0 auto" }} noValidate>
         <p className="form-note">* Required field</p>
         <label>Property address *<input name="propertyAddress" required /></label>
         <div className="form-grid two">
@@ -31,7 +31,7 @@ export function PhotographyPage() {
         <label>Email *<input name="email" type="email" required /></label>
         <label>Preferred dates *<input name="preferredDates" required /></label>
         <label>Additional notes (optional)<textarea name="notes" /></label>
-        {done && <p className="badge orange">A member of the Haaste photography team will contact you shortly.</p>}
+        {done && <p className="badge orange">A member of the Hilltro photography team will contact you shortly.</p>}
         <button className="btn primary">Submit request</button>
       </form>
     </main>

@@ -1,35 +1,142 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { ShieldCheck, Landmark, CreditCard } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, BadgePoundSterling, BriefcaseBusiness, Building2, FileText, Home, MessageSquare, PenLine, Search, ShieldCheck, UploadCloud, UserRound, Zap } from "lucide-react";
 import { propertyService } from "../../app/services";
 import type { Property } from "../../types/domain";
 import { PropertyCard } from "./PropertyCard";
+import { primeCentralListings } from "../../data/properties";
+import { assetUrl } from "../../utils/asset";
 
 export function HomePage() {
-  const [properties, setProperties] = useState<Property[]>([]);
-  useEffect(() => { propertyService.search({}).then((items) => setProperties(items.slice(0, 3))).catch(() => setProperties([])); }, []);
+  const [properties, setProperties] = useState<Property[]>(primeCentralListings);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    propertyService.search({})
+      .then((items) => setProperties(mergeProperties(items.length ? items : primeCentralListings, primeCentralListings).slice(0, 10)))
+      .catch(() => setProperties(primeCentralListings));
+  }, []);
   return (
-    <main className="page">
-      <section className="hero">
-        <p className="badge orange">UK rental operating system</p>
-        <h1>Rent in 5 clicks.</h1>
-        <p>Search verified homes, complete referencing, book a viewing, submit an offer and sign your Assured Periodic Tenancy inside one secure platform.</p>
-        <div className="hero-actions">
-          <Link className="btn primary" to="/search">Search properties</Link>
-          <Link className="btn light" to="/register">Create account</Link>
+    <main>
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <p className="eyebrow">Secure lettings platform that connects landlords and tenants</p>
+          <h1>Rent in 5 clicks.</h1>
+          <p>Quick referencing and seamless controlled letting for tenants and pre-referenced verified tenants for landlords. Everything you need to rent a flat inside one secure platform.</p>
+          <div className="hero-actions equal-actions">
+            <Link className="btn primary" to="/search"><Search size={18} /> Search Properties</Link>
+            <Link className="btn primary" to="/register"><UserRound size={18} /> Create Account</Link>
+            <Link className="btn primary" to="/register?role=Landlord"><Building2 size={18} /> List Your Property</Link>
+          </div>
+        </div>
+        <div className="hero-composition" aria-hidden="true">
+          <img className="hero-photo hero-photo-main" src={assetUrl("assets/properties/hilltro-luxury-flats-hero.png")} alt="" />
+          <img className="hero-photo hero-photo-secondary" src={assetUrl("assets/properties/hilltro-luxury-house-hero.png")} alt="" />
+          <div className="ui-preview search-preview">
+            <span>Prime Central London</span>
+            <b>10 new homes in your area!</b>
+            <small>£1,500 - £25,000 pcm</small>
+          </div>
+          <div className="ui-preview passport-preview">
+            <ShieldCheck size={18} />
+            <b>5 verified applicants made offers</b>
+            <small>Referenced renters are ready for your property.</small>
+          </div>
         </div>
       </section>
 
-      <section className="grid cols-3">
-        {properties.map((property) => <PropertyCard key={property.id} property={property} />)}
-        {properties.length === 0 && <article className="card"><h3>No live listings yet.</h3><p className="muted">Published landlord listings will appear here immediately.</p><Link className="btn" to="/search">Open search</Link></article>}
+      <section className="section-shell">
+        <div className="featured-row">
+          <h2>Featured Properties</h2>
+          <div className="featured-actions">
+            <Link className="see-all-link" to="/search">See All</Link>
+            <div className="carousel-controls" aria-label="Property carousel controls">
+            <button type="button" aria-label="Previous properties" onClick={() => scrollCarousel(carouselRef.current, -1)}><ArrowLeft size={18} /></button>
+            <button type="button" aria-label="Next properties" onClick={() => scrollCarousel(carouselRef.current, 1)}><ArrowRight size={18} /></button>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="grid cols-3" style={{ marginTop: 24 }}>
-        <article className="card"><ShieldCheck /><h3>Identity verification</h3><p className="muted">Passport, liveness, AML and fraud-check flows are isolated in the verification service layer.</p></article>
-        <article className="card"><Landmark /><h3>Open Banking ready</h3><p className="muted">Income and affordability workflows are structured for secure financial verification.</p></article>
-        <article className="card"><CreditCard /><h3>Payments prepared</h3><p className="muted">Rent, deposits and payout reconciliation are modeled for Stripe or Airwallex.</p></article>
+      <section className="property-carousel-shell" aria-label="Featured Prime Central London homes">
+        <Link className="btn primary mobile-properties-cta" to="/search">See Properties</Link>
+        <div
+          className="property-carousel"
+          ref={carouselRef}
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight") scrollCarousel(carouselRef.current, 1);
+            if (event.key === "ArrowLeft") scrollCarousel(carouselRef.current, -1);
+          }}
+        >
+          {properties.map((property) => <PropertyCard key={property.id} property={property} />)}
+        </div>
+        {properties.length === 0 && <article className="quiet-empty"><h3>No live listings yet.</h3><p className="muted">Published landlord listings will appear here immediately.</p><Link className="btn secondary" to="/search">Open search</Link></article>}
+      </section>
+
+      <section className="home-journey-band" aria-label="How Hilltro works">
+        <HomeStepSection
+          title="How to Complete Referencing"
+          steps={[
+            { title: "Provide your personal information.", icon: UserRound },
+            { title: "Share your employment and rental history.", icon: BriefcaseBusiness },
+            { title: "Receive your affordability assessment.", icon: BadgePoundSterling },
+            { title: "Build your verified rental profile.", icon: ShieldCheck },
+            { title: "Start viewing and applying for properties.", icon: Home }
+          ]}
+        />
+        <HomeStepSection
+          title="How to List Your Property"
+          steps={[
+            { title: "Upload your property's key information.", icon: UploadCloud },
+            { title: "Receive an instant rental guidance estimate.", icon: BadgePoundSterling },
+            { title: "Generate a description using our AI assistant.", icon: PenLine },
+            { title: "Publish your listing and start receiving enquiries.", icon: Building2 },
+            { title: "Manage viewings, offers and communications.", icon: MessageSquare }
+          ]}
+        />
+      </section>
+      <section className="stacked-info-section" aria-label="Rental journey guidance">
+        <article className="stacked-info-card"><Zap size={28} /><div><h3>Our referencing process takes approximately 6 minutes on average.</h3><p>Complete the steps and be ready to rent your next home.</p></div></article>
+        <article className="stacked-info-card"><ShieldCheck size={28} /><div><h3>Is my information secure?</h3><p>Yes. We use trusted providers to process information securely and operate in line with UK GDPR requirements.</p></div></article>
+        <article className="stacked-info-card"><FileText size={28} /><div><h3>What happens after my offer is accepted?</h3><p>You will progress through the tenancy process within one platform, including communication, document management and payment coordination.</p></div></article>
       </section>
     </main>
   );
+}
+
+function HomeStepSection({ title, steps }: { title: string; steps: Array<{ title: string; icon: typeof UserRound }> }) {
+  return (
+    <section className="home-step-section">
+      <div className="section-heading"><h2>{title}</h2></div>
+      <div className={`home-step-flow count-${steps.length}`}>
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <div className="home-step-wrap" key={step.title}>
+              <article className="home-step-card">
+                <span>{index + 1}</span>
+                <Icon size={24} />
+                <h3>{step.title}</h3>
+              </article>
+              {index < steps.length - 1 && <ArrowRight className="home-step-arrow" aria-hidden="true" />}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function scrollCarousel(element: HTMLDivElement | null, direction: -1 | 1) {
+  if (!element) return;
+  element.scrollBy({ left: direction * Math.round(element.clientWidth * 0.82), behavior: "smooth" });
+}
+
+function mergeProperties(primary: Property[], local: Property[]) {
+  const seen = new Set<string>();
+  return [...local, ...primary].filter((property) => {
+    if (seen.has(property.id)) return false;
+    seen.add(property.id);
+    return true;
+  });
 }

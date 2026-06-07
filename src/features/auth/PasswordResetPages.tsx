@@ -21,8 +21,8 @@ export function ForgotPasswordPage() {
   return (
     <main className="page auth-page">
       <section className="auth-shell">
-        <div className="auth-copy"><p className="badge orange">Password reset</p><h1>Reset access securely.</h1><p>We will email a secure reset link for your Haaste account.</p></div>
-        <form className="card form-grid auth-card" onSubmit={submit}>
+        <div className="auth-copy"><p className="badge orange">Password reset</p><h1>Reset access securely.</h1><p>We will email a secure reset link for your Hilltro account.</p></div>
+        <form className="card form-grid auth-card" onSubmit={submit} noValidate>
           <p className="form-note">* Required field</p>
           <label>Email *<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
           <button className="btn primary">Send reset link</button>
@@ -59,7 +59,7 @@ export function ResetPasswordPage() {
     <main className="page auth-page">
       <section className="auth-shell">
         <div className="auth-copy"><p className="badge orange">New password</p><h1>Create a new password.</h1><p>Use a strong password before returning to your workspace.</p></div>
-        <form className="card form-grid auth-card" onSubmit={submit}>
+        <form className="card form-grid auth-card" onSubmit={submit} noValidate>
           {!done && <><p className="form-note">* Required field</p><label>New Password *<input name="password" type="password" required minLength={8} /></label><label>Confirm Password *<input name="confirm" type="password" required minLength={8} /></label><button className="btn primary">Update password</button></>}
           {error && <p className="notice error">{error}</p>}
           {done && <p className="notice success">Password updated. <Link to="/login">Return to login</Link></p>}

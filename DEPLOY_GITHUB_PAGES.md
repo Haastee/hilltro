@@ -1,4 +1,4 @@
-# Deploy Haaste to GitHub Pages at haaste.co.uk
+# Deploy Hilltro to GitHub Pages at hilltro.com
 
 This guide assumes you have never deployed a website before.
 
@@ -8,14 +8,14 @@ This guide assumes you have never deployed a website before.
 - Git installed on your computer.
 - Node.js installed.
 - Your Supabase project URL and publishable key.
-- Access to the DNS settings for `haaste.co.uk`.
+- Access to the DNS settings for `hilltro.com`.
 
 ## 1. Create a GitHub Repository
 
 1. Go to https://github.com.
 2. Sign in.
 3. Press the green **New** button.
-4. Repository name: `Haaste`.
+4. Repository name: `Hilltro`.
 5. Choose **Private** or **Public**.
 6. Do not tick "Add a README".
 7. Press **Create repository**.
@@ -35,7 +35,7 @@ If you see a version number, Git is installed. If macOS asks you to install comm
 In Terminal, go to the project folder:
 
 ```bash
-cd /Users/princehalfcut/Documents/Haaste
+cd /Users/princehalfcut/Documents/Hilltro
 ```
 
 Install packages:
@@ -75,7 +75,7 @@ git add .
 Create a save point:
 
 ```bash
-git commit -m "Prepare Haaste React app for deployment"
+git commit -m "Prepare Hilltro React app for deployment"
 ```
 
 ## 6. Connect To GitHub
@@ -83,19 +83,19 @@ git commit -m "Prepare Haaste React app for deployment"
 Copy the repository URL from GitHub. It looks like:
 
 ```bash
-https://github.com/YOUR_USERNAME/Haaste.git
+https://github.com/YOUR_USERNAME/Hilltro.git
 ```
 
 Connect your local folder to GitHub:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/Haaste.git
+git remote add origin https://github.com/YOUR_USERNAME/Hilltro.git
 ```
 
 If Git says `remote origin already exists`, use:
 
 ```bash
-git remote set-url origin https://github.com/YOUR_USERNAME/Haaste.git
+git remote set-url origin https://github.com/YOUR_USERNAME/Hilltro.git
 ```
 
 Push the code:
@@ -128,7 +128,7 @@ Value: your Supabase publishable key
 
 These values are safe to use in the browser because Supabase protects data with Row Level Security policies.
 
-## 8. Turn On GitHub Pages With haaste.co.uk
+## 8. Turn On GitHub Pages With hilltro.com
 
 1. In GitHub, open the repository.
 2. Go to **Settings**.
@@ -137,7 +137,7 @@ These values are safe to use in the browser because Supabase protects data with 
 5. Under **Custom domain**, type:
 
 ```text
-haaste.co.uk
+hilltro.com
 ```
 
 6. Press **Save**.
@@ -146,18 +146,18 @@ haaste.co.uk
 The file `public/CNAME` is already included in this project and contains:
 
 ```text
-haaste.co.uk
+hilltro.com
 ```
 
 That tells GitHub Pages to keep using the custom domain after every deploy.
 
-## 9. Point haaste.co.uk To GitHub Pages
+## 9. Point hilltro.com To GitHub Pages
 
-Open the website where you manage the domain `haaste.co.uk`. This might be GoDaddy, Namecheap, Cloudflare, Squarespace Domains, IONOS, or another domain provider.
+Open the website where you manage the domain `hilltro.com`. This might be GoDaddy, Namecheap, Cloudflare, Squarespace Domains, IONOS, or another domain provider.
 
 Find the **DNS** settings.
 
-For the root domain `haaste.co.uk`, add these four **A records**:
+For the root domain `hilltro.com`, add these four **A records**:
 
 ```text
 Type: A
@@ -183,7 +183,7 @@ Name: @
 Value: 185.199.111.153
 ```
 
-For `www.haaste.co.uk`, add this **CNAME record**:
+For `www.hilltro.com`, add this **CNAME record**:
 
 ```text
 Type: CNAME
@@ -211,15 +211,15 @@ To trigger it manually:
 Open:
 
 ```text
-https://haaste.co.uk
+https://hilltro.com
 ```
 
 Open that URL in Chrome, Safari, Edge, and your phone browser.
 
 Check:
 
-- The Haaste favicon appears in the browser tab.
-- Refreshing `https://haaste.co.uk/login`, `https://haaste.co.uk/register`, `https://haaste.co.uk/search`, `https://haaste.co.uk/landlord`, and `https://haaste.co.uk/tenant` works.
+- The Hilltro favicon appears in the browser tab.
+- Refreshing `https://hilltro.com/login`, `https://hilltro.com/register`, `https://hilltro.com/search`, `https://hilltro.com/landlord`, and `https://hilltro.com/tenant` works.
 - Images load.
 - Registration and login connect to Supabase.
 
@@ -234,14 +234,14 @@ Check:
 After that, always use:
 
 ```text
-https://haaste.co.uk
+https://hilltro.com
 ```
 
 ## Supabase SQL
 
 Run migrations in Supabase SQL Editor in this order:
 
-1. `supabase/migrations/202606040001_haaste_core.sql`
+1. `supabase/migrations/202606040001_hilltro_core.sql`
 2. `supabase/migrations/202606040002_profile_signup_trigger.sql`
 3. `supabase/migrations/202606040003_split_profile_names.sql`
 
@@ -258,15 +258,15 @@ If the page is blank:
 - Check GitHub Actions finished successfully.
 - Check repository secrets are named exactly `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Open the browser developer console and check for red errors.
-- Make sure the workflow builds with `VITE_BASE_PATH: /`. This is already configured for `haaste.co.uk`.
+- Make sure the workflow builds with `VITE_BASE_PATH: /`. This is already configured for `hilltro.com`.
 
 If refresh gives a 404:
 
 - Make sure `public/404.html` exists in the repository.
 - Make sure GitHub Pages source is set to **GitHub Actions**.
-- Make sure the custom domain in GitHub Pages is exactly `haaste.co.uk`.
+- Make sure the custom domain in GitHub Pages is exactly `hilltro.com`.
 
-If `haaste.co.uk` does not open:
+If `hilltro.com` does not open:
 
 - Check the four A records are added exactly.
 - Check `www` has a CNAME pointing to `YOUR_USERNAME.github.io`.

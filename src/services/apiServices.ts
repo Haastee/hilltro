@@ -2,7 +2,7 @@ import type { Conversation, Property, ReferencingStep, TenantPassport, User } fr
 import type { AuthService, MessageService, PhotographerService, PropertyService, SearchFilters } from "./contracts";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
-const TOKEN_KEY = "haaste.api.token";
+const TOKEN_KEY = "hilltro.api.token";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = sessionStorage.getItem(TOKEN_KEY);

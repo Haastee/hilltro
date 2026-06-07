@@ -1,6 +1,6 @@
-# Haaste Full-Stack Architecture
+# Hilltro Full-Stack Architecture
 
-Haaste is a single production-oriented codebase. The frontend source of truth is React + TypeScript + Vite; there is no parallel static implementation.
+Hilltro is a single production-oriented codebase. The frontend source of truth is React + TypeScript + Vite; there is no parallel static implementation.
 
 ## Runtime
 
@@ -8,7 +8,7 @@ Haaste is a single production-oriented codebase. The frontend source of truth is
 - Backend: Express API in `server/index.ts`
 - Database: PostgreSQL through Prisma
 - Styling: central tokens and shared component classes in `src/design/tokens.css`
-- Assets: `assets/haaste-logo.svg`, favicon and property imagery
+- Assets: `assets/branding/hilltro-logo.svg`, favicon and property imagery
 
 ## Source Layout
 

@@ -3,11 +3,31 @@ import type { Conversation, Property, ReferencingStep, TenantPassport, User } fr
 import type { AuthService, MessageService, PhotographerService, PropertyService, SearchFilters } from "./contracts";
 import { assetUrl } from "../utils/asset";
 import { displayName, splitDisplayName } from "../utils/name";
+import { storageService } from "./storageService";
 
 const CONTACT_BLOCKER = /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})|(\+?\d[\d\s().-]{7,}\d)|(https?:\/\/|www\.)|(@[a-z0-9_]{3,})|(whatsapp|telegram|instagram|facebook|tiktok)/i;
+const DEMO_LANDLORD_SESSION_KEY = "hilltro.demo.landlord.session";
+const DEMO_LANDLORD_EMAIL = "landlord.demo@hilltro.com";
+const DEMO_LANDLORD_PASSWORD = "Hilltro!234";
+export const demoLandlordUser: User = {
+  id: "demo-landlord-olivia-hart",
+  name: "Olivia Hart",
+  firstName: "Olivia",
+  middleName: "",
+  lastName: "Hart",
+  email: DEMO_LANDLORD_EMAIL,
+  phone: "+44 7700 900001",
+  profileImageUrl: "",
+  role: "LANDLORD"
+};
+
+export function isDemoLandlordSession() {
+  return localStorage.getItem(DEMO_LANDLORD_SESSION_KEY) === "true";
+}
 
 export class SupabaseAuthService implements AuthService {
   async currentUser(): Promise<User | null> {
+    if (isDemoLandlordSession()) return demoLandlordUser;
     const { data } = await supabase.auth.getUser();
     if (!data.user) return null;
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
@@ -15,7 +35,7 @@ export class SupabaseAuthService implements AuthService {
     return mapUser(profile);
   }
 
-  async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"] }): Promise<User> {
+  async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<User> {
     const name = displayName(input);
     const { data, error } = await supabase.auth.signUp({
       email: input.email,
@@ -34,6 +54,7 @@ export class SupabaseAuthService implements AuthService {
     if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Registration did not return a user.");
     if (data.session) {
+      const profileImageUrl = input.profileImage ? (await storageService.uploadProfileImage(data.user.id, input.profileImage)).url : null;
       const profile = {
         id: data.user.id,
         email: input.email.toLowerCase(),
@@ -42,6 +63,7 @@ export class SupabaseAuthService implements AuthService {
         middle_name: input.middleName || null,
         last_name: input.lastName,
         phone: input.phone,
+        profile_image_url: profileImageUrl,
         role: input.role.toLowerCase()
       };
       await supabase.from("profiles").upsert(profile);
@@ -51,6 +73,10 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async login(email: string, password: string): Promise<User> {
+    if (email.toLowerCase() === DEMO_LANDLORD_EMAIL && password === DEMO_LANDLORD_PASSWORD) {
+      localStorage.setItem(DEMO_LANDLORD_SESSION_KEY, "true");
+      return demoLandlordUser;
+    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
     const user = await this.currentUser();
@@ -59,14 +85,15 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async logout(): Promise<void> {
+    localStorage.removeItem(DEMO_LANDLORD_SESSION_KEY);
     await supabase.auth.signOut();
   }
 }
 
 export class SupabasePropertyService implements PropertyService {
   async search(filters: SearchFilters): Promise<Property[]> {
-    let query = supabase.from("properties").select("*, property_photos(public_url, sort_order)").eq("status", "live").order("created_at", { ascending: false });
-    if (filters.location) {
+    let query = supabase.from("properties").select("*, property_photos(public_url, sort_order), floorplans(public_url), property_videos(public_url, external_url, provider, thumbnail_url)").eq("status", "live").order("created_at", { ascending: false });
+    if (filters.location && !filters.radiusMiles) {
       const location = filters.location.trim();
       query = query.or(`postcode_district.ilike.%${location}%,city.ilike.%${location}%,area.ilike.%${location}%,postcode.ilike.%${location}%`);
     }
@@ -76,11 +103,16 @@ export class SupabasePropertyService implements PropertyService {
     if (filters.propertyType && filters.propertyType !== "Any") query = query.eq("property_type", filters.propertyType);
     const { data, error } = await query.limit(100);
     if (error) throw new Error(error.message);
-    return (data || []).map((row) => mapProperty(row, filters.maxPrice));
+    const properties = (data || []).map((row) => mapProperty(row, filters.maxPrice));
+    if (filters.location && filters.radiusMiles) {
+      const origin = locationOrigin(properties, filters.location);
+      return origin ? properties.filter((property) => distanceMiles(origin, property) <= filters.radiusMiles!) : properties.filter((property) => matchesLocation(property, filters.location || ""));
+    }
+    return properties;
   }
 
   async getProperty(id: string): Promise<Property | undefined> {
-    const { data, error } = await supabase.from("properties").select("*, property_photos(public_url, sort_order)").eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("properties").select("*, property_photos(public_url, sort_order), floorplans(public_url), property_videos(public_url, external_url, provider, thumbnail_url)").eq("id", id).maybeSingle();
     if (error) throw new Error(error.message);
     return data ? mapProperty(data) : undefined;
   }
@@ -95,7 +127,7 @@ export class SupabasePropertyService implements PropertyService {
     const { data: user } = await supabase.auth.getUser();
     if (!user.user) throw new Error("Sign in required.");
     const payload = toPropertyRow(input, user.user.id, "draft");
-    const { data, error } = await supabase.from("properties").insert(payload).select("*, property_photos(public_url, sort_order)").single();
+    const { data, error } = await supabase.from("properties").insert(payload).select("*, property_photos(public_url, sort_order), floorplans(public_url), property_videos(public_url, external_url, provider, thumbnail_url)").single();
     if (error) throw new Error(error.message);
     return mapProperty(data);
   }
@@ -104,6 +136,29 @@ export class SupabasePropertyService implements PropertyService {
     const { error } = await supabase.from("properties").update({ status: "live" }).eq("id", propertyId);
     if (error) throw new Error(error.message);
   }
+}
+
+function matchesLocation(property: Property, location: string) {
+  const query = location.trim().toLowerCase();
+  if (!query) return true;
+  return [property.city, property.area, property.postcodeDistrict, property.postcode, property.streetName, property.fullAddress].join(" ").toLowerCase().includes(query);
+}
+
+function locationOrigin(properties: Property[], location: string) {
+  const query = location.trim().toLowerCase().split(/\s+/)[0];
+  const match = properties.find((property) => [property.postcodeDistrict, property.postcode, property.area, property.city].some((value) => value.toLowerCase().startsWith(query)));
+  return match?.latitude && match?.longitude ? { latitude: match.latitude, longitude: match.longitude } : null;
+}
+
+function distanceMiles(a: { latitude: number; longitude: number }, b: { latitude?: number; longitude?: number }) {
+  if (!b.latitude || !b.longitude) return Number.MAX_SAFE_INTEGER;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(h));
 }
 
 export class SupabaseMessageService implements MessageService {
@@ -119,6 +174,9 @@ export class SupabaseMessageService implements MessageService {
     return (data || []).map((conversation) => ({
       id: conversation.id,
       subject: conversation.subject,
+      propertyId: conversation.property_id,
+      landlordId: conversation.landlord_id,
+      applicantId: conversation.applicant_id,
       unreadCount: (conversation.messages || []).filter((message: { read_at?: string; sender_id: string }) => !message.read_at && message.sender_id !== user.user!.id).length,
       messages: (conversation.messages || []).map((message: { id: string; sender_id: string; body: string; created_at: string; read_at?: string; attachment_url?: string }) => ({
         id: message.id,
@@ -156,17 +214,19 @@ export class SupabasePhotographerService implements PhotographerService {
   }
 }
 
-function mapUser(profile: { id: string; email: string; name?: string; first_name?: string | null; middle_name?: string | null; last_name?: string | null; phone?: string; role: string }): User {
+function mapUser(profile: { id: string; email: string; name?: string; first_name?: string | null; middle_name?: string | null; last_name?: string | null; phone?: string; profile_image_url?: string | null; role: string }): User {
   const fallback = splitDisplayName(profile.name || "");
   const firstName = profile.first_name || fallback.firstName;
   const middleName = profile.middle_name || fallback.middleName || "";
   const lastName = profile.last_name || fallback.lastName || firstName;
   const name = displayName({ firstName, middleName, lastName, name: profile.name });
-  return { id: profile.id, email: profile.email, name, firstName, middleName, lastName, phone: profile.phone, role: profile.role === "landlord" ? "LANDLORD" : "TENANT" };
+  return { id: profile.id, email: profile.email, name, firstName, middleName, lastName, phone: profile.phone, profileImageUrl: profile.profile_image_url || undefined, role: profile.role === "landlord" ? "LANDLORD" : "TENANT" };
 }
 
 function mapProperty(row: any, maxPrice?: number): Property {
   const photos = [...(row.property_photos || [])].sort((a, b) => a.sort_order - b.sort_order);
+  const floorplan = row.floorplans?.[0];
+  const video = row.property_videos?.[0];
   return {
     id: row.id,
     title: row.title,
@@ -183,7 +243,15 @@ function mapProperty(row: any, maxPrice?: number): Property {
     availableFrom: row.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     furnishingStatus: row.furnishing || "Flexible",
     description: row.description || "",
-    imageUrl: photos[0]?.public_url || assetUrl("assets/london-apartment-photo.png"),
+    features: row.features || row.outside_space || [],
+    imageUrl: photos[0]?.public_url || assetUrl("assets/properties/london-apartment-photo.png"),
+    imageUrls: photos.map((photo) => photo.public_url).filter(Boolean),
+    floorplanUrl: floorplan?.public_url,
+    videoUrl: video?.external_url || video?.public_url,
+    videoProvider: video?.provider || (video?.public_url ? "Uploaded video" : undefined),
+    videoThumbnailUrl: video?.thumbnail_url || photos[0]?.public_url,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
     status: row.status === "live" ? "LIVE" : row.status === "inactive" ? "LET" : "DRAFT",
     verifiedEnquiriesOnly: true,
     slightlyAboveBudget: Boolean(maxPrice && row.rent_pcm > maxPrice && row.rent_pcm <= Math.round(maxPrice * 1.15))
@@ -204,6 +272,7 @@ function toPropertyRow(input: Partial<Property>, landlordId: string, status: "dr
     rent_pcm: input.rentPcm || 0,
     furnishing: input.furnishingStatus || "Flexible",
     description: input.description || "",
+    features: input.features || [],
     status
   };
 }
