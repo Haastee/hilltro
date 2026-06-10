@@ -3,12 +3,25 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export function HomeHeroRotator({ slides, labels, interval = 6500 }: { slides: ReactNode[]; labels: string[]; interval?: number }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const hasRotated = useRef(false);
 
-  // Always auto-advance so the landlord hero is guaranteed to appear; the
-  // prefers-reduced-motion media query in CSS softens the transition to a
-  // quick opacity fade with no movement for motion-sensitive users.
+  // First rotation is guaranteed: it fires once after `interval` regardless of
+  // hover/pause, so the landlord hero always reveals itself at least once. Its
+  // timer is set on mount only, so hovering can't reset or block it.
   useEffect(() => {
-    if (paused || slides.length < 2) return;
+    if (slides.length < 2) return;
+    const id = window.setTimeout(() => {
+      hasRotated.current = true;
+      setActive((current) => (current + 1) % slides.length);
+    }, interval);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Subsequent rotations: continuous cycle that respects pause-on-hover/focus.
+  // (prefers-reduced-motion is softened to a quick opacity fade via CSS.)
+  useEffect(() => {
+    if (!hasRotated.current || paused || slides.length < 2) return;
     const id = window.setTimeout(() => setActive((current) => (current + 1) % slides.length), interval);
     return () => window.clearTimeout(id);
   }, [active, paused, slides.length, interval]);
