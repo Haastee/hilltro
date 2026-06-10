@@ -30,6 +30,7 @@ export function SelectField({
   const ref = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const selected = options.find((option) => option.value === value) || options[0];
+  const isEmptyState = !value || value === "Any" || value === "Any Radius";
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return options;
@@ -77,7 +78,7 @@ export function SelectField({
   return (
     <div className={`select-field ${className}`} ref={ref}>
       <span>{label}</span>
-      <button type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)} onKeyDown={onKeyDown}>
+      <button type="button" className={`select-trigger ${isEmptyState ? "empty-value" : "filled-value"}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)} onKeyDown={onKeyDown}>
         {selected?.label || value}
         <ChevronDown size={18} />
       </button>

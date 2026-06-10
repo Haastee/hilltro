@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Map, Navigation, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { Building, Building2, Home, Layers, Map, Navigation, Search, SlidersHorizontal, Star, Users, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { propertyService } from "../../app/services";
 import { authService } from "../../app/services";
@@ -7,14 +7,14 @@ import { primeCentralListings } from "../../data/properties";
 import { locationSuggestions } from "../../services/postcodesIo";
 import type { Property } from "../../types/domain";
 import { SelectField } from "../../components/SelectField";
+import { MultiSelectField, type MultiSelectOption } from "../../components/MultiSelectField";
 import { PropertyCard } from "./PropertyCard";
 import { filterByPolygon, filterByRadius, locationOrigin, type LatLngPoint } from "../../services/locationService";
 import { readPendingSavedSearch, saveSearch, setPendingSavedSearch } from "../../services/engagementService";
 
 const PropertyMap = lazy(() => import("../../components/map/PropertyMap"));
 
-const bedroomOptions = [
-  { value: "Any", label: "Any beds" },
+const bedroomOptions: MultiSelectOption[] = [
   { value: "Studio", label: "Studio" },
   { value: "1", label: "1 bed" },
   { value: "2", label: "2 beds" },
@@ -23,16 +23,32 @@ const bedroomOptions = [
   { value: "5", label: "5+ beds" }
 ];
 
-const bathroomOptions = [
-  { value: "Any", label: "Any bathrooms" },
-  { value: "1", label: "1+ bathroom" },
-  { value: "2", label: "2+ bathrooms" },
-  { value: "3", label: "3+ bathrooms" },
+const bathroomOptions: MultiSelectOption[] = [
+  { value: "1", label: "1 bathroom" },
+  { value: "2", label: "2 bathrooms" },
+  { value: "3", label: "3 bathrooms" },
   { value: "4", label: "4+ bathrooms" }
 ];
 
-const typeOptions = ["Any", "Flat", "Penthouse", "House", "Maisonette", "Detached House", "Semi-Detached House", "Terraced House", "Bungalow", "Shared Property"].map((value) => ({ value, label: propertyTypeLabel(value) }));
-const furnishingOptions = ["Any", "Furnished", "Part-Furnished", "Unfurnished"].map((value) => ({ value, label: value === "Any" ? "Any furnishing" : value }));
+const typeOptions: MultiSelectOption[] = [
+  { value: "Flat", label: "Flat", icon: <Building2 size={16} /> },
+  { value: "Penthouse", label: "Penthouse", icon: <Building size={16} /> },
+  { value: "House", label: "House", icon: <Home size={16} /> },
+  { value: "Maisonette", label: "Maisonette", icon: <Layers size={16} /> },
+  { value: "Detached House", label: "Detached House", icon: <Home size={16} /> },
+  { value: "Semi-Detached House", label: "Semi-Detached House", icon: <Home size={16} /> },
+  { value: "Terraced House", label: "Terraced House", icon: <Home size={16} /> },
+  { value: "Bungalow", label: "Bungalow", icon: <Home size={16} /> },
+  { value: "Shared Property", label: "Shared Property", icon: <Users size={16} /> }
+];
+
+const furnishingOptions: MultiSelectOption[] = [
+  { value: "Furnished", label: "Furnished" },
+  { value: "Part-Furnished", label: "Part-Furnished" },
+  { value: "Unfurnished", label: "Unfurnished" }
+];
+
+const parseList = (value?: string) => (value ? value.split(",").map((item) => item.trim()).filter(Boolean) : []);
 const availabilityOptions = ["Any", "Now", "This month", "Next month"].map((value) => ({ value, label: value === "Any" ? "Any availability" : value }));
 const radiusOptions = ["Any Radius", "This area only", "Within 1 mile", "Within 3 miles", "Within 5 miles"].map((value) => ({ value, label: value }));
 const priceOptions = buildPriceOptions();
@@ -45,10 +61,10 @@ export function SearchPage() {
     location: params.get("location") || pendingSavedSearch?.location || "",
     maxPrice: params.get("maxPrice") || pendingSavedSearch?.maxPrice || "",
     minPrice: params.get("minPrice") || pendingSavedSearch?.minPrice || "",
-    bedrooms: pendingSavedSearch?.bedrooms || "Any",
-    bathrooms: pendingSavedSearch?.bathrooms || "Any",
-    propertyType: pendingSavedSearch?.propertyType || "Any",
-    furnishing: pendingSavedSearch?.furnishing || "Any",
+    bedrooms: parseList(pendingSavedSearch?.bedrooms),
+    bathrooms: parseList(pendingSavedSearch?.bathrooms),
+    propertyType: parseList(pendingSavedSearch?.propertyType),
+    furnishing: parseList(pendingSavedSearch?.furnishing),
     availability: pendingSavedSearch?.availability || "Any",
     radius: pendingSavedSearch?.radius || "Any Radius"
   });
@@ -76,8 +92,8 @@ export function SearchPage() {
       location: filters.location,
       minPrice: filters.minPrice ? Number(filters.minPrice) : undefined,
       maxPrice: filters.maxPrice && !filters.maxPrice.endsWith("+") ? Number(filters.maxPrice) : undefined,
-      bedrooms: filters.bedrooms === "Studio" || filters.bedrooms === "Any" ? 0 : Number(filters.bedrooms),
-      propertyType: filters.propertyType,
+      bedrooms: 0,
+      propertyType: "Any",
       radiusMiles: radiusMiles(filters.radius)
     }).then(setRemoteResults).catch(() => setRemoteResults([]));
     setAppliedPolygon([]);
@@ -123,10 +139,10 @@ export function SearchPage() {
       .filter((property) => matchesSearchArea(property, filters.location, radius, origin))
       .filter((property) => property.rentPcm >= (Number(filters.minPrice) || 0))
       .filter((property) => !filters.maxPrice || filters.maxPrice.endsWith("+") || property.rentPcm <= Number(filters.maxPrice))
-      .filter((property) => filters.bedrooms === "Any" || (filters.bedrooms === "Studio" ? property.bedrooms === 1 : property.bedrooms >= Number(filters.bedrooms)))
-      .filter((property) => filters.bathrooms === "Any" || property.bathrooms >= Number(filters.bathrooms))
-      .filter((property) => filters.propertyType === "Any" || property.type === filters.propertyType || (filters.propertyType === "House" && property.type.includes("House")))
-      .filter((property) => filters.furnishing === "Any" || property.furnishingStatus === filters.furnishing)
+      .filter((property) => filters.bedrooms.length === 0 || filters.bedrooms.some((value) => value === "5" ? property.bedrooms >= 5 : value === "Studio" ? property.bedrooms <= 1 : property.bedrooms === Number(value)))
+      .filter((property) => filters.bathrooms.length === 0 || filters.bathrooms.some((value) => value === "4" ? property.bathrooms >= 4 : property.bathrooms === Number(value)))
+      .filter((property) => filters.propertyType.length === 0 || filters.propertyType.some((type) => property.type === type || (type === "House" && property.type.includes("House"))))
+      .filter((property) => filters.furnishing.length === 0 || filters.furnishing.includes(property.furnishingStatus))
       .filter((property) => filters.availability === "Any" || availabilityMatches(property.availableFrom, filters.availability));
   }, [remoteResults, filters]);
 
@@ -137,10 +153,10 @@ export function SearchPage() {
     filters.location.trim() ||
     filters.minPrice ||
     filters.maxPrice ||
-    filters.bedrooms !== "Any" ||
-    filters.bathrooms !== "Any" ||
-    filters.propertyType !== "Any" ||
-    filters.furnishing !== "Any" ||
+    filters.bedrooms.length > 0 ||
+    filters.bathrooms.length > 0 ||
+    filters.propertyType.length > 0 ||
+    filters.furnishing.length > 0 ||
     filters.availability !== "Any" ||
     filters.radius !== "Any Radius" ||
     appliedPolygon.length >= 3
@@ -181,10 +197,10 @@ export function SearchPage() {
     location: filters.location,
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
-    bedrooms: filters.bedrooms,
-    bathrooms: filters.bathrooms,
-    propertyType: filters.propertyType,
-    furnishing: filters.furnishing,
+    bedrooms: filters.bedrooms.join(","),
+    bathrooms: filters.bathrooms.join(","),
+    propertyType: filters.propertyType.join(","),
+    furnishing: filters.furnishing.join(","),
     availability: filters.availability,
     radius: filters.radius
   };
@@ -252,12 +268,15 @@ export function SearchPage() {
           <button className="btn primary search-submit">Search properties</button>
         </div>
         <div className="filter-controls-row">
+          <span className="filter-group-label">Essentials</span>
           <SelectField label="Minimum price" value={filters.minPrice} options={priceOptions} searchable compactMenu initialScrollValue="2000" className="price-select" onChange={(value) => setFilters({ ...filters, minPrice: value })} />
           <SelectField label="Maximum price" value={filters.maxPrice} options={priceOptions} searchable compactMenu initialScrollValue="3000" className="price-select" onChange={(value) => setFilters({ ...filters, maxPrice: value })} />
-          <SelectField label="Bedrooms" value={filters.bedrooms} options={bedroomOptions} onChange={(value) => setFilters({ ...filters, bedrooms: value })} />
-          <SelectField label="Bathrooms" value={filters.bathrooms} options={bathroomOptions} onChange={(value) => setFilters({ ...filters, bathrooms: value })} />
-          <SelectField label="Property type" value={filters.propertyType} options={typeOptions} onChange={(value) => setFilters({ ...filters, propertyType: value })} />
-          <SelectField label="Furnishing" value={filters.furnishing} options={furnishingOptions} onChange={(value) => setFilters({ ...filters, furnishing: value })} />
+          <MultiSelectField label="Bedrooms" values={filters.bedrooms} options={bedroomOptions} anyLabel="Any beds" onChange={(values) => setFilters({ ...filters, bedrooms: values })} />
+          <MultiSelectField label="Bathrooms" values={filters.bathrooms} options={bathroomOptions} anyLabel="Any baths" onChange={(values) => setFilters({ ...filters, bathrooms: values })} />
+          <span className="filter-group-divider" aria-hidden="true" />
+          <span className="filter-group-label">Refine</span>
+          <MultiSelectField label="Property type" values={filters.propertyType} options={typeOptions} anyLabel="All types" onChange={(values) => setFilters({ ...filters, propertyType: values })} />
+          <MultiSelectField label="Furnishing" values={filters.furnishing} options={furnishingOptions} anyLabel="Any furnishing" onChange={(values) => setFilters({ ...filters, furnishing: values })} />
           <SelectField label="Availability" value={filters.availability} options={availabilityOptions} onChange={(value) => setFilters({ ...filters, availability: value })} />
           <SelectField label="Search radius" value={filters.radius} options={radiusOptions} onChange={(value) => setFilters({ ...filters, radius: value })} />
         </div>
@@ -296,6 +315,14 @@ export function SearchPage() {
             <div><p className="eyebrow">Map View</p><h2>{results.length} mapped properties</h2></div>
             <button className="btn secondary" onClick={() => setMapViewOpen(false)}><X size={18} /> List View</button>
           </div>
+          {drawMode && (
+            <div className="guidance-banner draw-guidance" role="status">
+              <Navigation size={16} />
+              <span>{draftPolygon.length < 3
+                ? `Minimum 3 points required. Click the map to add points, then double-click to complete the area. (${draftPolygon.length}/3)`
+                : "Double-click to complete the area, or keep adding points. Drag any point to fine-tune the boundary."}</span>
+            </div>
+          )}
           <div className="premium-map real-map full-map-view">
             <Suspense fallback={<div className="map-loading">Loading map...</div>}>
               <PropertyMap
@@ -305,6 +332,7 @@ export function SearchPage() {
                 drawing={drawMode}
                 polygon={draftPolygon}
                 onPolygonChange={setDraftPolygon}
+                onCompleteDrawing={() => setDrawMode(false)}
                 radiusOrigin={radiusOrigin}
                 radiusMiles={radius}
                 onBoundsChange={setVisibleMapPolygon}
@@ -317,7 +345,7 @@ export function SearchPage() {
             <button className="btn primary" disabled={draftPolygon.length < 3} onClick={() => { setAppliedPolygon(draftPolygon); setDrawMode(false); }}>Search drawn area</button>
             {(draftPolygon.length > 0 || appliedPolygon.length > 0) && <button className="btn tertiary" onClick={() => { setDrawMode(false); setDraftPolygon([]); setAppliedPolygon([]); }}><X size={17} /> Clear area</button>}
           </div>
-          <p className="map-note">{appliedPolygon.length >= 3 ? `${results.length} matching properties inside the drawn search area.` : drawMode ? "Click the map to draw a custom search area. Add at least three points, then search drawn area." : `${results.length} mapped properties. OpenStreetMap tiles are loaded lazily when the map appears.`}</p>
+          <p className="map-note">{appliedPolygon.length >= 3 ? `${results.length} matching properties inside the drawn search area.` : drawMode ? "Click the map to add points (minimum 3). Double-click to complete the area, then search drawn area." : `${results.length} mapped properties. OpenStreetMap tiles are loaded lazily when the map appears.`}</p>
         </section>
       )}
 
@@ -394,10 +422,11 @@ function formatCurrency(value: number) {
   return `£${value.toLocaleString("en-GB")}`;
 }
 
-function suggestedSearchName(filters: { location: string; propertyType: string }) {
-  if (filters.location && filters.propertyType !== "Any") return `${filters.propertyType} near ${filters.location}`;
+function suggestedSearchName(filters: { location: string; propertyType: string[] }) {
+  const type = filters.propertyType[0];
+  if (filters.location && type) return `${type} near ${filters.location}`;
   if (filters.location) return `${filters.location} homes`;
-  if (filters.propertyType !== "Any") return `${filters.propertyType} search`;
+  if (type) return `${type} search`;
   return "My Hilltro search";
 }
 
@@ -422,22 +451,6 @@ function availabilityMatches(value: string, filter: string) {
   const startNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   const endNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
   return date >= startNextMonth && date <= endNextMonth;
-}
-
-function propertyTypeLabel(value: string) {
-  const icons: Record<string, string> = {
-    Any: "All types",
-    Flat: "▣ Flat",
-    Penthouse: "▤ Penthouse",
-    House: "⌂ House",
-    Maisonette: "▥ Maisonette",
-    "Detached House": "⌂ Detached House",
-    "Semi-Detached House": "⌂ Semi-Detached House",
-    "Terraced House": "▥ Terraced House",
-    Bungalow: "⌂ Bungalow",
-    "Shared Property": "◐ Shared Property"
-  };
-  return icons[value] || value;
 }
 
 function matchesSearchArea(property: Property, location: string, radius: number, origin: { latitude: number; longitude: number } | null) {

@@ -10,6 +10,7 @@ import type { LatLngPoint } from "../../services/locationService";
 import { firstCoordinate } from "../../services/locationService";
 
 const MarkerClusterGroup = (MarkerClusterModule as any).default || MarkerClusterModule;
+const BRAND_COLOUR = "#B84E1A";
 
 type Props = {
   properties: Property[];
@@ -18,23 +19,24 @@ type Props = {
   drawing: boolean;
   polygon: LatLngPoint[];
   onPolygonChange: (polygon: LatLngPoint[]) => void;
+  onCompleteDrawing?: () => void;
   radiusOrigin?: LatLngPoint | null;
   radiusMiles?: number;
   onBoundsChange?: (bounds: LatLngPoint[]) => void;
 };
 
-export default function PropertyMap({ properties, selectedPropertyId, onSelectProperty, drawing, polygon, onPolygonChange, radiusOrigin, radiusMiles = 0, onBoundsChange }: Props) {
+export default function PropertyMap({ properties, selectedPropertyId, onSelectProperty, drawing, polygon, onPolygonChange, onCompleteDrawing, radiusOrigin, radiusMiles = 0, onBoundsChange }: Props) {
   const center = firstCoordinate(properties) || { latitude: 51.5076, longitude: -0.1904 };
   return (
-    <MapContainer className="osm-property-map" center={[center.latitude, center.longitude]} zoom={13} scrollWheelZoom>
+    <MapContainer className="osm-property-map" center={[center.latitude, center.longitude]} zoom={13} scrollWheelZoom doubleClickZoom={false}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitToResults properties={properties} onBoundsChange={onBoundsChange} />
-      <DrawSearchLayer drawing={drawing} polygon={polygon} onPolygonChange={onPolygonChange} />
-      {polygon.length >= 3 && <Polygon positions={polygon.map((point) => [point.latitude, point.longitude])} pathOptions={{ color: "#ff6600", fillColor: "#ff6600", fillOpacity: 0.16, weight: 2.5 }} />}
-      {radiusOrigin && radiusMiles > 0 && <Circle center={[radiusOrigin.latitude, radiusOrigin.longitude]} radius={radiusMiles * 1609.344} pathOptions={{ color: "#ff6600", fillOpacity: 0.06, weight: 1.5 }} />}
+      <DrawSearchLayer drawing={drawing} polygon={polygon} onPolygonChange={onPolygonChange} onCompleteDrawing={onCompleteDrawing} />
+      {polygon.length >= 3 && <Polygon positions={polygon.map((point) => [point.latitude, point.longitude])} pathOptions={{ color: BRAND_COLOUR, fillColor: BRAND_COLOUR, fillOpacity: 0.16, weight: 2.5 }} />}
+      {radiusOrigin && radiusMiles > 0 && <Circle center={[radiusOrigin.latitude, radiusOrigin.longitude]} radius={radiusMiles * 1609.344} pathOptions={{ color: BRAND_COLOUR, fillOpacity: 0.06, weight: 1.5 }} />}
       <MarkerClusterGroup chunkedLoading showCoverageOnHover={false}>
         {properties.filter((property) => property.latitude && property.longitude).map((property) => (
           <LMarker key={property.id} property={property} selected={selectedPropertyId === property.id} onSelect={() => onSelectProperty(property.id)} />
@@ -104,12 +106,16 @@ function FitToResults({ properties, onBoundsChange }: { properties: Property[]; 
   return null;
 }
 
-function DrawSearchLayer({ drawing, polygon, onPolygonChange }: { drawing: boolean; polygon: LatLngPoint[]; onPolygonChange: (polygon: LatLngPoint[]) => void }) {
+function DrawSearchLayer({ drawing, polygon, onPolygonChange, onCompleteDrawing }: { drawing: boolean; polygon: LatLngPoint[]; onPolygonChange: (polygon: LatLngPoint[]) => void; onCompleteDrawing?: () => void }) {
   const [cursorPoint, setCursorPoint] = useState<LatLngPoint | null>(null);
   const polygonRef = useRef(polygon);
+  const clickTimer = useRef<number | null>(null);
   useEffect(() => {
     polygonRef.current = polygon;
   }, [polygon]);
+  useEffect(() => () => {
+    if (clickTimer.current) window.clearTimeout(clickTimer.current);
+  }, []);
   const vertexIcon = useMemo(() => L.divIcon({
     className: "draw-vertex-marker",
     html: "<span></span>",
@@ -126,7 +132,23 @@ function DrawSearchLayer({ drawing, polygon, onPolygonChange }: { drawing: boole
   useMapEvents({
     click(event) {
       if (!drawing) return;
-      onPolygonChange([...polygonRef.current, { latitude: event.latlng.lat, longitude: event.latlng.lng }]);
+      // Defer adding the point so the closing double-click does not drop stray vertices.
+      if (clickTimer.current) return;
+      const latlng = event.latlng;
+      clickTimer.current = window.setTimeout(() => {
+        onPolygonChange([...polygonRef.current, { latitude: latlng.lat, longitude: latlng.lng }]);
+        clickTimer.current = null;
+      }, 240);
+    },
+    dblclick(event) {
+      if (!drawing) return;
+      L.DomEvent.stop(event);
+      if (clickTimer.current) {
+        window.clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+      }
+      setCursorPoint(null);
+      if (polygonRef.current.length >= 3) onCompleteDrawing?.();
     },
     mousemove(event) {
       if (!drawing || polygon.length === 0) return;
@@ -164,8 +186,8 @@ function DrawSearchLayer({ drawing, polygon, onPolygonChange }: { drawing: boole
 
   return (
     <>
-      {path.length >= 2 && <Polyline positions={path} pathOptions={{ color: "#ff6600", weight: 2.5, opacity: 0.92 }} />}
-      {guidePath.length === 2 && <Polyline positions={guidePath} pathOptions={{ color: "#ff6600", weight: 2, opacity: 0.72, dashArray: "6 8" }} />}
+      {path.length >= 2 && <Polyline positions={path} pathOptions={{ color: BRAND_COLOUR, weight: 2.5, opacity: 0.92 }} />}
+      {guidePath.length === 2 && <Polyline positions={guidePath} pathOptions={{ color: BRAND_COLOUR, weight: 2, opacity: 0.72, dashArray: "6 8" }} />}
       {polygon.map((point, index) => (
         <Marker
           key={`${point.latitude}-${point.longitude}-${index}`}

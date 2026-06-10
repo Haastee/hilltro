@@ -52,11 +52,19 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     authService.currentUser().then(setUser).finally(() => setAuthReady(true));
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const nav = useMemo(() => {
@@ -102,7 +110,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar ${scrolled ? "scrolled" : ""} ${menuOpen ? "menu-open" : ""}`}>
         <NavLink className="brand" to={homeTarget} aria-label="Hilltro home" onClick={handleLogoClick}><img src={assetUrl("assets/branding/hilltro-logo.svg")} alt="Hilltro" /></NavLink>
         <button className="mobile-menu-button" type="button" aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
           {menuOpen ? <X size={22} /> : <Menu size={22} />}

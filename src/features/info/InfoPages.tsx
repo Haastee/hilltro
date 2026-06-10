@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowRight, Building2, Eye, FileSignature, Gauge, Home, MessageSquare, Search, ShieldCheck, SlidersHorizontal, UserRound, Zap } from "lucide-react";
 
 export function AboutPage() {
@@ -33,26 +34,27 @@ export function AboutPage() {
 }
 
 export function HowItWorksPage() {
-  const [mode, setMode] = useState<"tenant" | "landlord">("tenant");
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState<"tenant" | "landlord">(params.get("role") === "landlord" ? "landlord" : "tenant");
   const journeys = {
     tenant: {
       title: "How to rent a property in 5 clicks",
       steps: [
-        { title: "Create Account", icon: UserRound },
-        { title: "Complete Referencing", icon: ShieldCheck },
-        { title: "Find Properties", icon: Search },
-        { title: "Request Viewings & Send Offers", icon: MessageSquare },
-        { title: "Sign Contract", icon: FileSignature }
+        { title: "Create an Account", icon: UserRound, description: ["Create your Hilltro account and complete your basic profile information.", "Get started in just a few minutes."] },
+        { title: "Complete Referencing", icon: ShieldCheck, description: ["Provide identity, employment and affordability information.", "Our referencing process typically takes only a few minutes to complete."] },
+        { title: "Find Properties", icon: Search, description: ["Search available properties using location, maps, filters and saved searches.", "Discover homes that match your requirements."] },
+        { title: "Request Viewings & Send Offers", icon: MessageSquare, description: ["Request viewings directly through the platform.", "After viewing a property, submit offers and communicate with landlords from one place."] },
+        { title: "Sign Contract & Move In", icon: FileSignature, description: ["Complete your tenancy journey digitally.", "Review documents, sign agreements and prepare for your move without unnecessary paperwork."] }
       ]
     },
     landlord: {
       title: "How to rent out your property in 5 clicks",
       steps: [
-        { title: "Create Listing", icon: Home },
-        { title: "Receive Referenced Enquiries", icon: ShieldCheck },
-        { title: "Manage Viewings", icon: MessageSquare },
-        { title: "Accept Offer", icon: Building2 },
-        { title: "Sign Contract", icon: FileSignature }
+        { title: "List Your Property", icon: Home, description: ["List your property completely free of charge.", "Add photos, descriptions and property details in just a few minutes.", "Don't have professional photos? We can help you organise them."] },
+        { title: "Receive Referenced Enquiries", icon: ShieldCheck, description: ["Receive viewing requests from applicants who have completed referencing and affordability checks.", "Review applicant information before arranging viewings.", "Spend less time filtering enquiries and more time speaking with serious tenants."] },
+        { title: "Manage Viewings", icon: MessageSquare, description: ["Arrange and manage viewings through a single platform.", "Focus on applicants who are genuinely interested and ready to move.", "Keep all communication and scheduling organised in one place."] },
+        { title: "Accept Offer", icon: Building2, description: ["Receive offers from tenants after viewings.", "Compare applicants, review affordability information and choose the tenant that best fits your property."] },
+        { title: "Sign Contract", icon: FileSignature, description: ["Sign tenancy agreements directly through the platform.", "Need additional clauses? Submit your requirements and our AI-lawyer will add them before signing."] }
       ]
     }
   };
@@ -69,7 +71,7 @@ export function HowItWorksPage() {
   );
 }
 
-function JourneyFlow({ mode, setMode, title, steps }: { mode: "tenant" | "landlord"; setMode: (mode: "tenant" | "landlord") => void; title: string; steps: Array<{ title: string; icon: typeof UserRound }> }) {
+function JourneyFlow({ mode, setMode, title, steps }: { mode: "tenant" | "landlord"; setMode: (mode: "tenant" | "landlord") => void; title: string; steps: Array<{ title: string; icon: typeof UserRound; description: string[] }> }) {
   return (
     <section className="journey-panel">
       <div className="segmented-control journey-toggle" role="tablist" aria-label="Choose journey">
@@ -92,6 +94,17 @@ function JourneyFlow({ mode, setMode, title, steps }: { mode: "tenant" | "landlo
           );
         })}
       </div>
+      <ol className="journey-details">
+        {steps.map((step, index) => (
+          <li className="journey-detail" key={step.title}>
+            <span className="journey-detail-num">{index + 1}</span>
+            <div className="journey-detail-body">
+              <h3>{step.title}</h3>
+              {step.description.map((line) => <p key={line}>{line}</p>)}
+            </div>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
