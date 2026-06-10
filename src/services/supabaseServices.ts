@@ -92,10 +92,12 @@ export class SupabaseAuthService implements AuthService {
 
 export class SupabasePropertyService implements PropertyService {
   async search(filters: SearchFilters): Promise<Property[]> {
-    let query = supabase.from("properties").select("*, property_photos(public_url, sort_order), floorplans(public_url), property_videos(public_url, external_url, provider, thumbnail_url)").eq("status", "live").order("created_at", { ascending: false });
+    // Public catalogue view: safe columns only, approximate (~110m) coordinates,
+    // no exact address. The base properties table is owner-only.
+    let query = supabase.from("properties_public").select("*").order("created_at", { ascending: false });
     if (filters.location && !filters.radiusMiles) {
       const location = filters.location.trim();
-      query = query.or(`postcode_district.ilike.%${location}%,city.ilike.%${location}%,area.ilike.%${location}%,postcode.ilike.%${location}%`);
+      query = query.or(`postcode_district.ilike.%${location}%,city.ilike.%${location}%,area.ilike.%${location}%,district.ilike.%${location}%`);
     }
     if (filters.minPrice) query = query.gte("rent_pcm", filters.minPrice);
     if (filters.maxPrice) query = query.lte("rent_pcm", Math.round(filters.maxPrice * 1.15));
@@ -103,7 +105,7 @@ export class SupabasePropertyService implements PropertyService {
     if (filters.propertyType && filters.propertyType !== "Any") query = query.eq("property_type", filters.propertyType);
     const { data, error } = await query.limit(100);
     if (error) throw new Error(error.message);
-    const properties = (data || []).map((row) => mapProperty(row, filters.maxPrice));
+    const properties = (data || []).map((row) => mapPublicProperty(row, [], undefined, undefined, filters.maxPrice));
     if (filters.location && filters.radiusMiles) {
       const origin = locationOrigin(properties, filters.location);
       return origin ? properties.filter((property) => distanceMiles(origin, property) <= filters.radiusMiles!) : properties.filter((property) => matchesLocation(property, filters.location || ""));
@@ -112,9 +114,18 @@ export class SupabasePropertyService implements PropertyService {
   }
 
   async getProperty(id: string): Promise<Property | undefined> {
-    const { data, error } = await supabase.from("properties").select("*, property_photos(public_url, sort_order), floorplans(public_url), property_videos(public_url, external_url, provider, thumbnail_url)").eq("id", id).maybeSingle();
-    if (error) throw new Error(error.message);
-    return data ? mapProperty(data) : undefined;
+    // Property comes from the public view; gallery assets are fetched separately
+    // (the view has no foreign-key embed). Exact address is never returned here —
+    // PropertyDetailPage calls get_property_full_address once the viewer is approved.
+    const [propertyResult, photosResult, floorplanResult, videoResult] = await Promise.all([
+      supabase.from("properties_public").select("*").eq("id", id).maybeSingle(),
+      supabase.from("property_photos").select("public_url, sort_order").eq("property_id", id),
+      supabase.from("floorplans").select("public_url").eq("property_id", id),
+      supabase.from("property_videos").select("public_url, external_url, provider, thumbnail_url").eq("property_id", id)
+    ]);
+    if (propertyResult.error) throw new Error(propertyResult.error.message);
+    if (!propertyResult.data) return undefined;
+    return mapPublicProperty(propertyResult.data, photosResult.data || [], floorplanResult.data?.[0], videoResult.data?.[0]);
   }
 
   async saveProperty(propertyId: string): Promise<void> {
@@ -255,6 +266,51 @@ function mapProperty(row: any, maxPrice?: number): Property {
     status: row.status === "live" ? "LIVE" : row.status === "inactive" ? "LET" : "DRAFT",
     verifiedEnquiriesOnly: true,
     slightlyAboveBudget: Boolean(maxPrice && row.rent_pcm > maxPrice && row.rent_pcm <= Math.round(maxPrice * 1.15))
+  };
+}
+
+// Maps a row from the public catalogue view (properties_public). The exact
+// street address is intentionally withheld — only area/city/postcode district and
+// an approximate (~110m) location are exposed until a viewing is approved.
+function mapPublicProperty(
+  row: any,
+  photos: Array<{ public_url: string; sort_order: number }> = [],
+  floorplan?: { public_url?: string },
+  video?: { public_url?: string; external_url?: string; provider?: string; thumbnail_url?: string },
+  maxPrice?: number
+): Property {
+  const sorted = [...photos].sort((a, b) => a.sort_order - b.sort_order);
+  const images = sorted.map((photo) => photo.public_url).filter(Boolean);
+  const cover = images[0] || row.cover_photo_url || undefined;
+  const rent = row.rent_pcm || row.rent || 0;
+  return {
+    id: row.id,
+    title: row.title,
+    streetName: "",
+    area: row.area || row.city,
+    city: row.city,
+    postcodeDistrict: row.postcode_district,
+    fullAddress: [row.area, row.city, row.postcode_district].filter(Boolean).join(", "),
+    postcode: row.postcode_district,
+    type: row.property_type,
+    bedrooms: row.bedrooms,
+    bathrooms: row.bathrooms,
+    rentPcm: rent,
+    availableFrom: row.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    furnishingStatus: row.furnishing || "Flexible",
+    description: row.description || "",
+    features: row.outside_space || [],
+    imageUrl: cover || assetUrl("assets/properties/london-apartment-photo.png"),
+    imageUrls: images.length ? images : cover ? [cover] : [],
+    floorplanUrl: floorplan?.public_url,
+    videoUrl: video?.external_url || video?.public_url,
+    videoProvider: video?.provider || (video?.public_url ? "Uploaded video" : undefined),
+    videoThumbnailUrl: video?.thumbnail_url || cover,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    status: "LIVE",
+    verifiedEnquiriesOnly: true,
+    slightlyAboveBudget: Boolean(maxPrice && rent > maxPrice && rent <= Math.round(maxPrice * 1.15))
   };
 }
 

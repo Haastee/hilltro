@@ -110,7 +110,7 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
       return;
     }
     if (import.meta.env.VITE_SUPABASE_URL && property) {
-      const { data: row } = await supabase.from("properties").select("landlord_id").eq("id", property.id).maybeSingle();
+      const { data: row } = await supabase.from("properties_public").select("landlord_id").eq("id", property.id).maybeSingle();
       await supabase.from("viewings").insert({ property_id: property.id, landlord_id: row?.landlord_id, tenant_id: user.id, requested_date: viewingDate, requested_time: viewingTime, message: viewingMessage, status: "requested" });
     }
     setNotice("Viewing request sent. The landlord will see your referencing readiness, never private risk details.");
@@ -151,7 +151,7 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
       return;
     }
     if (import.meta.env.VITE_SUPABASE_URL && property) {
-      const { data: row } = await supabase.from("properties").select("landlord_id").eq("id", property.id).maybeSingle();
+      const { data: row } = await supabase.from("properties_public").select("landlord_id").eq("id", property.id).maybeSingle();
       await supabase.from("offers").insert({ property_id: property.id, landlord_id: row?.landlord_id, tenant_id: user!.id, offer_rent_pcm: Number(offer.rent || property.rentPcm), move_in_date: offer.moveDate || new Date().toISOString().slice(0, 10), occupants: offer.occupants, pets: offer.pets, notes: [offer.notes, offer.pets === "Yes" ? `Pet details: ${offer.petDetails}` : "", offer.attachmentImage ? "Supporting photo attached." : ""].filter(Boolean).join("\n"), status: "submitted" });
     }
     setOfferOpen(false);

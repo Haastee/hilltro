@@ -1,13 +1,48 @@
+import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 import { applicantById, propertyAddress } from "../../data/landlordProperties";
 import { HilltroAvatar } from "../../components/HilltroAvatar";
+import { supabase } from "../../utils/supabase";
+
+const isUuid = (value?: string) =>
+  !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export function ApplicantProfilePage() {
   const { applicantId } = useParams();
   const [params] = useSearchParams();
   const propertyId = params.get("property") || undefined;
-  const applicant = applicantById(applicantId) || applicantById("app-taylor")!;
+  const real = isUuid(applicantId);
+
+  // Real applicants: the name is disclosed server-side — "First L." while only an
+  // offer/viewing links the parties, full name once a deal exists. Demo applicants
+  // keep their demo records so the pre-launch experience stays populated.
+  const demo = applicantById(applicantId) || applicantById("app-taylor")!;
+  const [disclosedName, setDisclosedName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!real || !applicantId) return;
+    supabase.rpc("get_counterparty_profile", { target: applicantId }).then(({ data }) => {
+      if (data && typeof data === "object" && "display_name" in data) {
+        setDisclosedName((data as { display_name: string | null }).display_name);
+      }
+    });
+  }, [real, applicantId]);
+
+  const applicant = real
+    ? {
+        id: applicantId!,
+        name: disclosedName || "Applicant",
+        profileImageUrl: undefined as string | undefined,
+        referencingStatus: "In review",
+        affordabilityPcm: undefined as number | undefined,
+        employmentStatus: "Not supplied",
+        moveDate: undefined as string | undefined,
+        occupants: undefined as string | undefined,
+        pets: undefined as string | undefined
+      }
+    : demo;
+
   return (
     <main className="page">
       <section className="applicant-profile-hero">

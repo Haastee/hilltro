@@ -12,3 +12,4 @@ coverage/
 .vite/
 .claude/
 qa-screenshots/
+.supabase.env
