@@ -21,41 +21,53 @@ export function LandlordDashboard({ user }: { user: User }) {
 
         <div className="dashboard-hero-visual" aria-hidden="true">
           {/* Pre-referenced tenants */}
-          <article className="ll-card dash-card dash-applicant">
-            <header className="dash-applicant-head">
-              <HilltroAvatar name="Emily Dawson" size="md" />
-              <div className="dash-applicant-id">
-                <b>Emily D. <BadgeCheck size={14} className="ll-verified" /></b>
-                <small>Pre-referenced · Quantitative Analyst</small>
+          <div className="dash-feature">
+            <div className="dash-feature-label"><span>1</span> Pre-referenced tenants</div>
+            <p className="dash-feature-copy">Enquiries arrive already referenced and affordability-checked.</p>
+            <article className="ll-card dash-card dash-applicant">
+              <header className="dash-applicant-head">
+                <HilltroAvatar name="Emily Dawson" size="md" />
+                <div className="dash-applicant-id">
+                  <b>Emily D. <BadgeCheck size={14} className="ll-verified" /></b>
+                  <small>Pre-referenced · Quantitative Analyst</small>
+                </div>
+                <span className="dash-tag green">Low risk</span>
+              </header>
+              <div className="dash-applicant-meta">
+                <div><small>Affordability</small><b>Up to £4,166</b></div>
+                <div><small>Move-in</small><b>In 2 weeks</b></div>
               </div>
-              <span className="dash-tag green">Low risk</span>
-            </header>
-            <div className="dash-applicant-meta">
-              <div><small>Affordability</small><b>Up to £4,166</b></div>
-              <div><small>Move-in</small><b>In 2 weeks</b></div>
-            </div>
-          </article>
+            </article>
+          </div>
 
           {/* Payment & contract handling */}
-          <article className="ll-card dash-card dash-pay">
-            <div className="dash-pay-row">
-              <span className="dash-pay-icon"><BadgePoundSterling size={16} /></span>
-              <div><b>Rent collected</b><small>£4,000 · on time</small></div>
-              <span className="dash-ok">Paid</span>
-            </div>
-            <div className="dash-pay-row">
-              <span className="dash-pay-icon contract"><FileText size={16} /></span>
-              <div><b>Tenancy agreement</b><small>Deposit protected</small></div>
-              <span className="dash-ok"><Check size={11} /> Signed</span>
-            </div>
-          </article>
+          <div className="dash-feature">
+            <div className="dash-feature-label"><span>2</span> Payments &amp; contracts</div>
+            <p className="dash-feature-copy">Sign the tenancy and collect rent on time, all in one place.</p>
+            <article className="ll-card dash-card dash-pay">
+              <div className="dash-pay-row">
+                <span className="dash-pay-icon"><BadgePoundSterling size={16} /></span>
+                <div><b>Rent collected</b><small>£4,000 · on time</small></div>
+                <span className="dash-ok">Paid</span>
+              </div>
+              <div className="dash-pay-row">
+                <span className="dash-pay-icon contract"><FileText size={16} /></span>
+                <div><b>Tenancy agreement</b><small>Deposit protected</small></div>
+                <span className="dash-ok"><Check size={11} /> Signed</span>
+              </div>
+            </article>
+          </div>
 
           {/* Tenancy management */}
-          <article className="ll-card dash-card dash-chat">
-            <div className="dash-chat-head"><MessageSquare size={14} /> Tenancy chat</div>
-            <div className="dash-bubble tenant">Hi, it looks like my washing machine has stopped working?</div>
-            <div className="dash-bubble landlord">No problem — an engineer is on the way.</div>
-          </article>
+          <div className="dash-feature">
+            <div className="dash-feature-label"><span>3</span> Tenancy management</div>
+            <p className="dash-feature-copy">Stay on top of the tenancy and resolve issues quickly.</p>
+            <article className="ll-card dash-card dash-chat">
+              <div className="dash-chat-head"><MessageSquare size={14} /> Tenancy chat</div>
+              <div className="dash-bubble tenant">Hi, it looks like my washing machine has stopped working?</div>
+              <div className="dash-bubble landlord">No problem — an engineer is on the way.</div>
+            </article>
+          </div>
 
           <p className="dash-all-in">All in Hilltro.</p>
         </div>

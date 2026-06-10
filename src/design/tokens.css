@@ -444,7 +444,11 @@ body {
 /* ---- Landlord dashboard hero ---- */
 .landlord-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr); gap: clamp(28px, 4vw, 56px); align-items: center; text-align: left; }
 .dashboard-hero-copy { display: grid; gap: 18px; justify-items: start; }
-.dashboard-hero-visual { position: relative; display: grid; gap: 14px; }
+.dashboard-hero-visual { position: relative; display: grid; gap: 28px; }
+.dash-feature { display: grid; gap: 7px; }
+.dash-feature-label { display: inline-flex; align-items: center; gap: 8px; color: var(--color-bluegrey); font-size: 12px; font-weight: 850; letter-spacing: .02em; }
+.dash-feature-label span { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 999px; background: var(--color-brand-soft); color: var(--color-brand); font-size: 11px; font-weight: 800; }
+.dash-feature-copy { margin: 0 0 2px; color: var(--color-muted); font-size: 12.5px; line-height: 1.45; }
 .dash-card { position: static; padding: 16px 18px; animation: none; }
 .dash-applicant { display: grid; gap: 12px; box-shadow: 0 24px 60px rgba(16,24,32,.12); }
 .dash-applicant-head { display: flex; align-items: center; gap: 12px; }
