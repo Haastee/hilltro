@@ -35,6 +35,8 @@ export type Property = {
   videoProvider?: string;
   videoThumbnailUrl?: string;
   features?: string[];
+  floorLevel?: string;
+  hasLift?: boolean;
   latitude?: number;
   longitude?: number;
   status: "DRAFT" | "REVIEW" | "LIVE" | "LET";

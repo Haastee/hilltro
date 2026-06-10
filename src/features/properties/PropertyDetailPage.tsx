@@ -384,6 +384,8 @@ function propertyFeatures(property: Property) {
   return [
     `${property.bedrooms} ${property.bedrooms === 1 ? "Bedroom" : "Bedrooms"}`,
     `${property.bathrooms} ${property.bathrooms === 1 ? "Bathroom" : "Bathrooms"}`,
+    ...(property.floorLevel ? [property.floorLevel] : []),
+    ...(property.hasLift ? ["Lift"] : []),
     areaSqm,
     `Move in: ${availabilityLabel(property.availableFrom)}`,
     property.furnishingStatus,
