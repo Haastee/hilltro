@@ -1,27 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(query.matches);
-    update();
-    query.addEventListener?.("change", update);
-    return () => query.removeEventListener?.("change", update);
-  }, []);
-  return reduced;
-}
-
 export function HomeHeroRotator({ slides, labels, interval = 6500 }: { slides: ReactNode[]; labels: string[]; interval?: number }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
-  const reduced = usePrefersReducedMotion();
 
+  // Always auto-advance so the landlord hero is guaranteed to appear; the
+  // prefers-reduced-motion media query in CSS softens the transition to a
+  // quick opacity fade with no movement for motion-sensitive users.
   useEffect(() => {
-    if (reduced || paused || slides.length < 2) return;
+    if (paused || slides.length < 2) return;
     const id = window.setTimeout(() => setActive((current) => (current + 1) % slides.length), interval);
     return () => window.clearTimeout(id);
-  }, [active, paused, reduced, slides.length, interval]);
+  }, [active, paused, slides.length, interval]);
 
   return (
     <div
