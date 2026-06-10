@@ -3,29 +3,68 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { CalendarField } from "../../components/CalendarField";
 import { HilltroAvatar } from "../../components/HilltroAvatar";
 import { applicantOffers, interestEvents, managedProperties, type ApplicantOffer } from "../../data/landlordProperties";
+import { propertyService } from "../../app/services";
+import { acceptOfferToDeal, fetchPropertyOffers, isRealId } from "../../services/landlordService";
 
 type Deal = { applicant: string; rent: number; moveDate: string; status: string; referencing: string; nextSteps: string };
+type OfferHeader = { imageUrl: string; address: string; rentPcm: number; type: string; bedrooms: number };
 
 export function PropertyOffersPage() {
   const { propertyId } = useParams();
   const [params, setParams] = useSearchParams();
-  const property = managedProperties.find((item) => item.id === propertyId) || managedProperties[0];
-  const offers = applicantOffers.filter((offer) => offer.propertyId === property.id);
+  const real = isRealId(propertyId);
+  const [realOffers, setRealOffers] = useState<ApplicantOffer[]>([]);
+  const [realHeader, setRealHeader] = useState<OfferHeader | null>(null);
+
+  useEffect(() => {
+    if (!real || !propertyId) return;
+    let alive = true;
+    (async () => {
+      const [offerRows, prop] = await Promise.all([fetchPropertyOffers(propertyId), propertyService.getProperty(propertyId)]);
+      if (!alive) return;
+      setRealOffers(offerRows);
+      if (prop) setRealHeader({ imageUrl: prop.imageUrl, address: prop.fullAddress, rentPcm: prop.rentPcm, type: prop.type, bedrooms: prop.bedrooms });
+    })();
+    return () => { alive = false; };
+  }, [real, propertyId]);
+
+  const demoProperty = managedProperties.find((item) => item.id === propertyId) || managedProperties[0];
+  const property: OfferHeader = real
+    ? (realHeader || { imageUrl: "", address: "Your property", rentPcm: 0, type: "", bedrooms: 0 })
+    : { imageUrl: demoProperty.imageUrl, address: demoProperty.address, rentPcm: demoProperty.rentPcm, type: demoProperty.type, bedrooms: demoProperty.bedrooms };
+  const offers = real ? realOffers : applicantOffers.filter((offer) => offer.propertyId === demoProperty.id);
   const [expanded, setExpanded] = useState(params.get("offer") || offers[0]?.id || "");
   const [expiredModal, setExpiredModal] = useState<ApplicantOffer | null>(null);
   const [declined, setDeclined] = useState<Set<string>>(new Set());
   const [deal, setDeal] = useState<Deal | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [counterOffer, setCounterOffer] = useState<ApplicantOffer | null>(null);
+  const [acceptError, setAcceptError] = useState("");
   const tab = params.get("tab") || "offers";
 
   function changeTab(value: string) {
     setParams({ tab: value });
   }
 
-  function acceptOffer(offer: ApplicantOffer) {
+  async function acceptOffer(offer: ApplicantOffer) {
     if (new Date(offer.expiresAt).getTime() <= Date.now() || offer.status === "Expired") {
       setExpiredModal(offer);
+      return;
+    }
+    if (real && propertyId) {
+      const result = await acceptOfferToDeal(offer);
+      if (result.error) {
+        setAcceptError(result.error);
+        return;
+      }
+      // Re-fetch: other offers are now declined and the accepted applicant's name
+      // is disclosed in full (a deal now links the parties).
+      const refreshed = await fetchPropertyOffers(propertyId);
+      setRealOffers(refreshed);
+      const accepted = refreshed.find((item) => item.id === offer.id);
+      setDeal({ applicant: accepted?.applicantName || offer.applicantName, rent: offer.offerAmount, moveDate: offer.moveInDate, status: "Active Deal", referencing: offer.referencingStatus, nextSteps: "Prepare APT, collect deposit and confirm possession checklist." });
+      setCelebrationOpen(true);
+      changeTab("deals");
       return;
     }
     setDeal({ applicant: offer.applicantName, rent: offer.offerAmount, moveDate: offer.moveInDate, status: "Active Deal", referencing: offer.referencingStatus, nextSteps: "Prepare APT, collect deposit and confirm possession checklist." });
@@ -36,6 +75,11 @@ export function PropertyOffersPage() {
 
   function submitCounter(input: { rent: number; moveDate: string; notes: string }) {
     if (!counterOffer) return;
+    if (real) {
+      setCounterOffer(null);
+      setAcceptError("Counter offers aren't available yet for live listings — accept the offer or message the applicant instead.");
+      return;
+    }
     setDeal({ applicant: counterOffer.applicantName, rent: input.rent, moveDate: input.moveDate, status: "Counter Accepted", referencing: counterOffer.referencingStatus, nextSteps: "Tenant accepted the counter offer. Proceed to APT and deposit collection." });
     setCelebrationOpen(true);
     setDeclined(new Set(offers.filter((item) => item.id !== counterOffer.id).map((item) => item.id)));
@@ -61,7 +105,7 @@ export function PropertyOffersPage() {
 
       <section className="offer-tabs buttons">
         <button className={tab === "offers" ? "active" : ""} onClick={() => changeTab("offers")}>Offers <b>{offers.length}</b></button>
-        <button className={tab === "interest" ? "active" : ""} onClick={() => changeTab("interest")}>Interest <b>{interestEvents.filter((item) => item.propertyId === property.id).length}</b></button>
+        <button className={tab === "interest" ? "active" : ""} onClick={() => changeTab("interest")}>Interest <b>{real ? 0 : interestEvents.filter((item) => item.propertyId === demoProperty.id).length}</b></button>
         <button className={tab === "deals" ? "active" : ""} onClick={() => changeTab("deals")}>Deals <b>{deal ? 1 : 0}</b></button>
       </section>
 
@@ -82,7 +126,7 @@ export function PropertyOffersPage() {
         </section>
       )}
 
-      {tab === "interest" && <InterestTab propertyId={property.id} />}
+      {tab === "interest" && <InterestTab propertyId={real ? (propertyId || "") : demoProperty.id} />}
       {tab === "deals" && <DealsTab deal={deal} onReviewOffers={() => changeTab("offers")} />}
 
       {counterOffer && <CounterOfferModal offer={counterOffer} advertisedRent={property.rentPcm} onClose={() => setCounterOffer(null)} onSubmit={submitCounter} />}
@@ -94,6 +138,15 @@ export function PropertyOffersPage() {
             <h2>New Tenant Secured!</h2>
             <p className="muted">The accepted offer has moved into Deals. You can now progress APT, deposit and possession steps.</p>
             <button className="btn primary" type="button" onClick={() => setCelebrationOpen(false)}>Continue</button>
+          </div>
+        </div>
+      )}
+      {acceptError && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="card modal-card">
+            <h2>Could not accept this offer.</h2>
+            <p className="muted">{acceptError}</p>
+            <div className="hero-actions"><button className="btn primary" onClick={() => setAcceptError("")}>Close</button></div>
           </div>
         </div>
       )}
