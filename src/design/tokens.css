@@ -62,6 +62,8 @@ img { max-width: 100%; display: block; }
 .topbar.scrolled .nav a[href="/login"] { background: rgba(var(--color-brand-rgb),.06); box-shadow: none; }
 .topbar.scrolled .nav a.nav-attention { background: var(--color-orange); color: white; box-shadow: 0 10px 24px rgba(var(--color-brand-rgb),.18); }
 .topbar.scrolled .nav a.nav-attention:hover, .topbar.scrolled .nav a.nav-attention.active { background: var(--color-brand-hover); color: white; }
+.topbar.scrolled .nav a.nav-primary-cta { background: var(--color-orange); color: white !important; box-shadow: 0 10px 24px rgba(var(--color-brand-rgb),.22); }
+.topbar.scrolled .nav a.nav-primary-cta:hover { background: var(--color-brand-hover); }
 .brand img { width: auto; height: 42px; max-width: 194px; object-fit: contain; }
 .nav { margin-left: auto; display: flex; gap: 32px; align-items: center; }
 .nav a { min-height: auto; display: inline-flex; align-items: center; border-radius: 6px; padding: 4px 8px; text-decoration: none; color: var(--color-bluegrey); font-weight: 780; font-size: .92rem; transition: background .22s ease, color .22s ease, padding .22s ease, border-radius .22s ease, box-shadow .22s ease; }
@@ -72,7 +74,7 @@ img { max-width: 100%; display: block; }
 .session { display: flex; gap: 10px; align-items: center; }
 .avatar-nav-link { display: inline-flex; border-radius: 999px; box-shadow: 0 0 0 1px rgba(214,224,227,.9); transition: .16s ease; }
 .avatar-nav-link:hover, .avatar-nav-link.active { box-shadow: 0 0 0 4px rgba(var(--color-brand-rgb),.12); }
-.nav-primary-cta { min-height: 42px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0 16px !important; background: var(--color-orange); color: white !important; box-shadow: 0 12px 28px rgba(var(--color-brand-rgb),.22); }
+.nav-primary-cta { min-height: auto; display: inline-flex; align-items: center; border-radius: 999px; padding: 8px 16px !important; background: var(--color-orange); color: white !important; font-size: .92rem; box-shadow: 0 8px 20px rgba(var(--color-brand-rgb),.20); }
 .page { position: relative; padding: clamp(28px, 5vw, 64px); }
 .app-shell { min-height: 100vh; background: radial-gradient(circle at 88% 8%, rgba(var(--color-brand-rgb),.10), transparent 28rem), radial-gradient(circle at 4% 28%, rgba(61,83,91,.10), transparent 26rem), linear-gradient(180deg, #fbfcfc 0%, #f3f7f7 48%, #fbfcfc 100%); }
 .page::before { content: ""; position: absolute; inset: 24px auto auto 64%; z-index: -1; width: min(620px, 56vw); height: 260px; border-radius: 999px; background: linear-gradient(115deg, rgba(var(--color-brand-rgb),.10), rgba(255,255,255,.06), rgba(61,83,91,.10)); filter: blur(10px); pointer-events: none; }
@@ -438,6 +440,42 @@ body {
 .ll-sign-field { height: 52px; border: 1px dashed var(--border-secondary); border-radius: 10px; display: flex; align-items: center; padding: 0 14px; background: rgba(245,243,239,.55); }
 .ll-signature { font-family: "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive; font-size: 25px; color: var(--color-bluegrey); }
 .ll-contract-status { display: inline-flex; align-items: center; gap: 6px; color: var(--color-success); font-size: 12px; font-weight: 800; }
+
+/* ---- Landlord dashboard hero ---- */
+.landlord-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr); gap: clamp(28px, 4vw, 56px); align-items: center; text-align: left; }
+.dashboard-hero-copy { display: grid; gap: 18px; justify-items: start; }
+.dashboard-hero-visual { position: relative; display: grid; gap: 14px; }
+.dash-card { position: static; padding: 16px 18px; animation: none; }
+.dash-applicant { display: grid; gap: 12px; box-shadow: 0 24px 60px rgba(16,24,32,.12); }
+.dash-applicant-head { display: flex; align-items: center; gap: 12px; }
+.dash-applicant-head .hilltro-avatar { flex: none; }
+.dash-applicant-id { display: grid; gap: 2px; margin-right: auto; }
+.dash-applicant-id b { display: inline-flex; align-items: center; gap: 5px; font-size: 15px; }
+.dash-applicant-id small { color: var(--color-muted); font-size: 12px; }
+.dash-tag { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.dash-tag.green { background: rgba(21,127,79,.10); color: var(--color-success); }
+.dash-applicant-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dash-applicant-meta div { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid var(--color-line); border-radius: 10px; }
+.dash-applicant-meta small { color: var(--color-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.dash-applicant-meta b { font-size: 14px; }
+.dash-pay { display: grid; gap: 10px; }
+.dash-pay-row { display: flex; align-items: center; gap: 12px; }
+.dash-pay-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--color-brand-soft); color: var(--color-brand); }
+.dash-pay-icon.contract { background: rgba(21,127,79,.10); color: var(--color-success); }
+.dash-pay-row > div { display: grid; gap: 1px; margin-right: auto; }
+.dash-pay-row b { font-size: 14px; }
+.dash-pay-row small { color: var(--color-muted); font-size: 12px; }
+.dash-ok { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: rgba(21,127,79,.10); color: var(--color-success); font-size: 11px; font-weight: 800; }
+.dash-chat { display: grid; gap: 8px; }
+.dash-chat-head { display: inline-flex; align-items: center; gap: 6px; color: var(--color-muted); font-size: 12px; font-weight: 760; }
+.dash-bubble { max-width: 88%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.4; }
+.dash-bubble.tenant { justify-self: start; border-bottom-left-radius: 4px; background: #f1f4f5; color: var(--color-bluegrey); }
+.dash-bubble.landlord { justify-self: end; border-bottom-right-radius: 4px; background: var(--color-brand); color: #fff; }
+.dash-all-in { margin: 4px 0 0; text-align: center; color: var(--color-bluegrey); font-weight: 850; font-size: 15px; }
+@media (max-width: 900px) {
+  .landlord-dashboard-hero { grid-template-columns: 1fr; }
+  .dashboard-hero-visual { max-width: 460px; }
+}
 
 @media (max-width: 820px) {
   .landlord-actions { grid-template-columns: 1fr; max-width: none; }

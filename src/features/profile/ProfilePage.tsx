@@ -41,8 +41,8 @@ export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: 
     <main className="page">
       <section className="hero compact-hero">
         <p className="badge orange">My Profile</p>
-        <h1>Manage your account identity.</h1>
-        <p>Update the details used inside your Hilltro workspace. Public landlord display still shows first name only.</p>
+        <h1>Make it yours.</h1>
+        <p>Edit your name, add a profile picture and share a little about yourself — your hobbies or what makes you, you. Publicly, only your first name is ever shown.</p>
       </section>
       <section className="profile-settings-layout single-column-profile">
         <article className="card form-grid">
