@@ -3,19 +3,28 @@ import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { countryDialOptions } from "../data/countries";
 
+// Real flag images render consistently everywhere (Windows does not display
+// emoji flags — it falls back to the country letters).
+const flagUrl = (countryCode: string) => `https://flagcdn.com/${countryCode.toLowerCase()}.svg`;
+
 export function CountryDialCodePicker({ value, onChange, label = "Country code *" }: { value: string; onChange: (value: string) => void; label?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-  const selected = countryDialOptions.find((country) => `${country.countryCode}:${country.dialCode}` === value)
-    || countryDialOptions.find((country) => country.dialCode === value)
-    || countryDialOptions.find((country) => country.countryCode === "GB")
-    || countryDialOptions[0];
+  const orderedOptions = useMemo(() => {
+    const gb = countryDialOptions.filter((country) => country.countryCode === "GB");
+    const rest = countryDialOptions.filter((country) => country.countryCode !== "GB").sort((a, b) => a.name.localeCompare(b.name));
+    return [...gb, ...rest];
+  }, []);
+  const selected = orderedOptions.find((country) => `${country.countryCode}:${country.dialCode}` === value)
+    || orderedOptions.find((country) => country.dialCode === value)
+    || orderedOptions.find((country) => country.countryCode === "GB")
+    || orderedOptions[0];
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return term ? countryDialOptions.filter((country) => country.search.includes(term)) : countryDialOptions;
-  }, [query]);
+    return term ? orderedOptions.filter((country) => country.search.includes(term)) : orderedOptions;
+  }, [query, orderedOptions]);
 
   useEffect(() => {
     function close(event: PointerEvent) {
@@ -61,7 +70,7 @@ export function CountryDialCodePicker({ value, onChange, label = "Country code *
     <div className="country-picker" ref={ref} onKeyDown={onKeyDown}>
       <span>{label}</span>
       <button type="button" className="country-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{selected.flag}</span>
+        <img className="country-flag" src={flagUrl(selected.countryCode)} alt="" width={22} height={16} />
         <b>{selected.dialCode}</b>
         <small>{selected.name}</small>
         <ChevronDown size={18} />
@@ -83,7 +92,7 @@ export function CountryDialCodePicker({ value, onChange, label = "Country code *
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => choose(index)}
               >
-                <span>{country.flag}</span>
+                <img className="country-flag" src={flagUrl(country.countryCode)} alt="" loading="lazy" width={22} height={16} />
                 <b>{country.name}</b>
                 <small>{country.dialCode}</small>
               </button>

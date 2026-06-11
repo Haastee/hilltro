@@ -57,7 +57,7 @@ export class LocalAuthService implements AuthService {
     const user = { id, name: displayName(input), firstName: input.firstName, middleName: input.middleName || "", lastName: input.lastName, email: input.email.toLowerCase(), phone: input.phone, profileImageUrl, role: input.role, password: input.password };
     save(USERS_KEY, [...users.filter((stored) => stored.id !== demoLandlord.id), user]);
     save(SESSION_KEY, publicLocalUser(user));
-    return user;
+    return { status: "active" as const, user: publicLocalUser(user) };
   }
 
   async login(email: string, password: string) {

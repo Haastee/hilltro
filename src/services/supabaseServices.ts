@@ -1,6 +1,6 @@
 import { supabase } from "../utils/supabase";
 import type { Conversation, Property, ReferencingStep, TenantPassport, User } from "../types/domain";
-import type { AuthService, MessageService, PhotographerService, PropertyService, SearchFilters } from "./contracts";
+import type { AuthService, MessageService, PhotographerService, PropertyService, RegisterResult, SearchFilters } from "./contracts";
 import { assetUrl } from "../utils/asset";
 import { displayName, splitDisplayName } from "../utils/name";
 import { storageService } from "./storageService";
@@ -35,7 +35,7 @@ export class SupabaseAuthService implements AuthService {
     return mapUser(profile);
   }
 
-  async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<User> {
+  async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<RegisterResult> {
     if (!input.email?.trim() || !input.password) throw new Error("Enter your email and password to create an account.");
     const name = displayName(input);
     const { data, error } = await supabase.auth.signUp({
@@ -54,23 +54,27 @@ export class SupabaseAuthService implements AuthService {
     });
     if (error) throw new Error(error.message);
     if (!data.user) throw new Error("Registration did not return a user.");
-    if (data.session) {
-      const profileImageUrl = input.profileImage ? (await storageService.uploadProfileImage(data.user.id, input.profileImage)).url : null;
-      const profile = {
-        id: data.user.id,
-        email: input.email.toLowerCase(),
-        name,
-        first_name: input.firstName,
-        middle_name: input.middleName || null,
-        last_name: input.lastName,
-        phone: input.phone,
-        profile_image_url: profileImageUrl,
-        role: input.role.toLowerCase()
-      };
-      await supabase.from("profiles").upsert(profile);
-      return mapUser(profile);
+    // No session means email confirmation is required: the user must click the
+    // link we just emailed before any authenticated write (profile, photo,
+    // property) will succeed under RLS. Do NOT sign them in here — surface the
+    // "confirm your email" state so the app never pretends to be authenticated.
+    if (!data.session) {
+      return { status: "confirm", email: input.email.toLowerCase() };
     }
-    return { id: data.user.id, email: input.email.toLowerCase(), name, firstName: input.firstName, middleName: input.middleName || "", lastName: input.lastName, phone: input.phone, role: input.role };
+    const profileImageUrl = input.profileImage ? (await storageService.uploadProfileImage(data.user.id, input.profileImage)).url : null;
+    const profile = {
+      id: data.user.id,
+      email: input.email.toLowerCase(),
+      name,
+      first_name: input.firstName,
+      middle_name: input.middleName || null,
+      last_name: input.lastName,
+      phone: input.phone,
+      profile_image_url: profileImageUrl,
+      role: input.role.toLowerCase()
+    };
+    await supabase.from("profiles").upsert(profile);
+    return { status: "active", user: mapUser(profile) };
   }
 
   async login(email: string, password: string): Promise<User> {

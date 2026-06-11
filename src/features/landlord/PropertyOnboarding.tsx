@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ShieldCheck } from "lucide-react";
 import { lookupPostcode, suggestPostcodes } from "../../data/addressLookup";
 import { SelectField } from "../../components/SelectField";
 import { CalendarField } from "../../components/CalendarField";
@@ -20,11 +21,12 @@ const parkingOptions = ["No Parking", "On Street", "Resident Permit Available", 
 const furnishingOptions = ["Furnished", "Part Furnished", "Unfurnished", "Flexible", "Open To Discussion"];
 const specialFeatureOptions = ["Concierge", "Lift", "Great Views", "Gym", "Residents Lounge", "Roof Terrace", "Communal Garden", "Parking", "Balcony", "Air Conditioning", "EV Charging", "Swimming Pool"];
 
-type UploadedPhoto = { id: string; name: string; url: string; progress: number };
+type UploadedPhoto = { id: string; name: string; url: string; progress: number; error?: boolean };
 const DRAFT_KEY = "hilltro.property.draft";
 
 export function PropertyOnboarding() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const resumeStep = params.get("resume");
   const initialStep = resumeStep === "details" ? 1 : resumeStep === "valuation" ? 7 : resumeStep === "photos" ? 8 : 0;
   const [step, setStep] = useState(initialStep);
@@ -50,9 +52,7 @@ export function PropertyOnboarding() {
   const [specialFeatures, setSpecialFeatures] = useState<string[]>([]);
   const [rent, setRent] = useState("");
   const [availableFrom, setAvailableFrom] = useState("");
-  const [photos, setPhotos] = useState<UploadedPhoto[]>(params.get("missing") === "activation" ? [] : [
-    { id: "seed-photo", name: "primary-photo.png", url: assetUrl("assets/properties/london-apartment-photo.png"), progress: 100 }
-  ]);
+  const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [floorplan, setFloorplan] = useState<UploadedPhoto | null>(null);
   const [videoTour, setVideoTour] = useState<UploadedPhoto | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
@@ -144,13 +144,19 @@ export function PropertyOnboarding() {
   }
 
   async function addFiles(fileList: FileList | File[]) {
-    const files = [...fileList].filter((file) => file.type.startsWith("image/"));
-    for (const file of files) {
-      const id = crypto.randomUUID();
-      setPhotos((current) => [...current, { id, name: file.name, url: "", progress: 5 }]);
-      const uploaded = await storageService.uploadImage(file, (progress) => setPhotos((current) => current.map((item) => item.id === id ? { ...item, progress } : item)));
-      setPhotos((current) => current.map((item) => item.id === id ? { ...item, url: uploaded.url, name: uploaded.name, progress: 100 } : item));
-    }
+    const entries = [...fileList].filter((file) => file.type.startsWith("image/")).map((file) => ({ file, id: crypto.randomUUID() }));
+    if (!entries.length) return;
+    // Add every selected photo as a placeholder immediately, then upload them in
+    // parallel so multi-select feels fast and each preview/progress updates live.
+    setPhotos((current) => [...current, ...entries.map(({ file, id }) => ({ id, name: file.name, url: "", progress: 5 }))]);
+    await Promise.all(entries.map(async ({ file, id }) => {
+      try {
+        const uploaded = await storageService.uploadImage(file, (progress) => setPhotos((current) => current.map((item) => item.id === id ? { ...item, progress } : item)));
+        setPhotos((current) => current.map((item) => item.id === id ? { ...item, url: uploaded.url, name: uploaded.name, progress: 100, error: false } : item));
+      } catch {
+        setPhotos((current) => current.map((item) => item.id === id ? { ...item, progress: 0, error: true } : item));
+      }
+    }));
   }
 
   async function addFloorplan(fileList: FileList | File[]) {
@@ -200,27 +206,45 @@ export function PropertyOnboarding() {
   }
 
   function replacePhoto(index: number) {
-    const next = [...photos];
-    next[index] = { id: crypto.randomUUID(), name: "replacement-photo.png", url: assetUrl("assets/properties/riverside-suite.png"), progress: 100 };
-    setPhotos(next);
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file || !file.type.startsWith("image/")) return;
+      const id = photos[index]?.id || crypto.randomUUID();
+      setPhotos((current) => current.map((item, position) => position === index ? { ...item, url: "", progress: 5, error: false } : item));
+      try {
+        const uploaded = await storageService.uploadImage(file, (progress) => setPhotos((current) => current.map((item, position) => position === index ? { ...item, progress } : item)));
+        setPhotos((current) => current.map((item, position) => position === index ? { id, name: uploaded.name, url: uploaded.url, progress: 100, error: false } : item));
+      } catch {
+        setPhotos((current) => current.map((item, position) => position === index ? { ...item, progress: 0, error: true } : item));
+      }
+    };
+    input.click();
+  }
+
+  function missingForStep(targetStep: number) {
+    const missingFields = new Set<string>();
+    if (targetStep === 0) {
+      if (!postcode.trim()) missingFields.add("postcode");
+      if (!postcodeData) missingFields.add("postcodeLookup");
+      if (!addressLine1.trim()) missingFields.add("address");
+      if (!town.trim()) missingFields.add("town");
+    }
+    if (targetStep === 1 && needsFloor && !details.floor) missingFields.add("floor");
+    if (targetStep === 2 && (!details.bathrooms || Number(details.bathrooms) < 1)) missingFields.add("bathrooms");
+    if (targetStep === 3 && details.outsideSpace === "Yes" && details.outsideTypes.length === 0) missingFields.add("outsideTypes");
+    if (targetStep === 4 && !details.description.trim()) missingFields.add("description");
+    if (targetStep === 6 && !availableFrom) missingFields.add("availableFrom");
+    if (targetStep === 7 && !rent) missingFields.add("rent");
+    if (targetStep === 8 && photos.length < 1) missingFields.add("photos");
+    if (targetStep === 10 && videoUrl.trim() && !isSupportedVideoUrl(videoUrl)) missingFields.add("videoUrl");
+    return missingFields;
   }
 
   function validateCurrentStep() {
-    const nextMissing = new Set<string>();
-    if (step === 0) {
-      if (!postcode.trim()) nextMissing.add("postcode");
-      if (!postcodeData) nextMissing.add("postcodeLookup");
-      if (!addressLine1.trim()) nextMissing.add("address");
-      if (!town.trim()) nextMissing.add("town");
-    }
-    if (step === 1 && needsFloor && !details.floor) nextMissing.add("floor");
-    if (step === 2 && (!details.bathrooms || Number(details.bathrooms) < 1)) nextMissing.add("bathrooms");
-    if (step === 3 && details.outsideSpace === "Yes" && details.outsideTypes.length === 0) nextMissing.add("outsideTypes");
-    if (step === 4 && !details.description.trim()) nextMissing.add("description");
-    if (step === 6 && !availableFrom) nextMissing.add("availableFrom");
-    if (step === 7 && !rent) nextMissing.add("rent");
-    if (step === 8 && photos.length < 1) nextMissing.add("photos");
-    if (step === 10 && videoUrl.trim() && !isSupportedVideoUrl(videoUrl)) nextMissing.add("videoUrl");
+    const nextMissing = missingForStep(step);
     setMissing(nextMissing);
     if (nextMissing.size) {
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -284,11 +308,24 @@ export function PropertyOnboarding() {
 
   async function saveAndFinishLater() {
     await saveDraft();
-    window.location.href = "/landlord/properties";
+    // Client-side navigation keeps the auth session intact (a full reload could
+    // momentarily lose it and bounce to /login).
+    navigate("/landlord/properties");
   }
 
   async function publishListing() {
-    if (!validateCurrentStep()) return;
+    // Validate the whole form. If anything required is missing, jump to that
+    // step and highlight it — never block on an invisible error.
+    for (let candidate = 0; candidate < steps.length; candidate += 1) {
+      const missingFields = missingForStep(candidate);
+      if (missingFields.size) {
+        setStep(candidate);
+        setMissing(missingFields);
+        panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    }
+    setMissing(new Set());
     const property = {
       id: params.get("propertyId") || `published-${crypto.randomUUID()}`,
       title: `${town || "Verified"} ${details.propertyType}`,
@@ -366,13 +403,13 @@ export function PropertyOnboarding() {
           });
         }
         localStorage.removeItem(DRAFT_KEY);
-        window.location.href = `/properties/${data.id}`;
+        navigate(`/properties/${data.id}`);
         return;
       }
     }
     savePublishedProperty(property);
     localStorage.removeItem(DRAFT_KEY);
-    window.location.href = `/properties/${property.id}`;
+    navigate(`/properties/${property.id}`);
   }
 
   return (
@@ -420,6 +457,7 @@ export function PropertyOnboarding() {
               </label>
               <label>Address line 2 (optional)<input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} placeholder="Street or building name" /></label>
               <label className={missing.has("town") ? "required-missing" : ""}>Town or borough *<input value={town} onChange={(event) => setTown(event.target.value)} />{missing.has("town") && <small>Town or borough is required for listing display and valuation guidance.</small>}</label>
+              <p className="form-hint"><ShieldCheck size={14} /> Your exact address will not be publicly displayed. Only relevant location information is shown to prospective tenants.</p>
             </div>
           )}
 
@@ -427,7 +465,11 @@ export function PropertyOnboarding() {
             <div className="form-grid">
               <h2>Property type</h2>
               <p className="form-note">* Required field</p>
-              <SelectField label="Property Type *" value={details.propertyType} onChange={(value) => setDetails({ ...details, propertyType: value, floor: houseTypes.includes(value) ? "" : details.floor, hasLift: houseTypes.includes(value) ? "" : details.hasLift })} options={propertyTypes.map((item) => ({ value: item, label: item }))} />
+              <SelectField label="Property Type *" value={details.propertyType} onChange={(value) => {
+                const isHouse = houseTypes.includes(value);
+                setDetails({ ...details, propertyType: value, floor: isHouse ? "" : details.floor, hasLift: isHouse ? "" : details.hasLift });
+                if (!isHouse) setSpecialFeatures((current) => current.filter((feature) => feature !== "Lift"));
+              }} options={propertyTypes.map((item) => ({ value: item, label: item }))} />
               {needsFloor && (
                 <div className={missing.has("floor") ? "required-missing" : ""}>
                   <SelectField label="Which floor is it on? *" value={details.floor} onChange={(value) => setDetails({ ...details, floor: value, hasLift: floorLevelNumber(value) >= 2 ? details.hasLift : "" })} options={[{ value: "", label: "Select a floor" }, ...floorOptions.map((item) => ({ value: item, label: item }))]} />
@@ -489,7 +531,7 @@ export function PropertyOnboarding() {
               <h2>Special Features</h2>
               <p className="muted">Optional. Select the details that make this home stand out.</p>
               <div className="feature-choice-grid">
-                {specialFeatureOptions.map((feature) => <button type="button" className={`feature-choice ${specialFeatures.includes(feature) ? "selected" : ""}`} key={feature} onClick={() => toggleSpecialFeature(feature)}>{feature}</button>)}
+                {specialFeatureOptions.filter((feature) => feature !== "Lift" || houseTypes.includes(details.propertyType)).map((feature) => <button type="button" className={`feature-choice ${specialFeatures.includes(feature) ? "selected" : ""}`} key={feature} onClick={() => toggleSpecialFeature(feature)}>{feature}</button>)}
               </div>
             </div>
           )}
@@ -518,12 +560,12 @@ export function PropertyOnboarding() {
             </div>
           )}
 
-          {step === 8 && <div className="form-grid"><h2>Photos</h2><div className={`dropzone photo-drop ${dragging ? "dragging" : ""} ${missing.has("photos") ? "required-missing" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><div><b>Drag photos here or click to upload</b><p className="muted">Upload at least four images where possible: main image, bedroom, kitchen/bathroom/exterior and another supporting angle.</p>{missing.has("photos") && <small>Upload at least one photo before activation.</small>}</div><input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => event.target.files && addFiles(event.target.files)} /></div><div className="photo-preview-grid">{photos.map((photo, index) => <article className="photo-preview" key={photo.id}><img src={photo.url} alt="" /><b>{index + 1}. {photo.name}</b><div className="upload-progress"><span style={{ width: `${photo.progress}%` }} /></div><div className="hero-actions"><button className="btn" onClick={() => reorderPhoto(index, -1)}>Up</button><button className="btn" onClick={() => reorderPhoto(index, 1)}>Down</button><button className="btn" onClick={() => replacePhoto(index)}>Replace</button><button className="btn" onClick={() => setPhotos(photos.filter((item) => item.id !== photo.id))}>Remove</button></div></article>)}</div><Link className="btn" to="/photography">Don't have professional photos? Book Photography with Hilltro</Link></div>}
+          {step === 8 && <div className="form-grid"><h2>Photos</h2><div className={`dropzone photo-drop ${dragging ? "dragging" : ""} ${missing.has("photos") ? "required-missing" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><div><b>Drag photos here or click to upload</b><p className="muted">Upload at least four images where possible: main image, bedroom, kitchen/bathroom/exterior and another supporting angle.</p>{missing.has("photos") && <small>Upload at least one photo before activation.</small>}</div><input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => event.target.files && addFiles(event.target.files)} /></div><div className="photo-preview-grid">{photos.map((photo, index) => <article className={`photo-preview ${photo.error ? "has-error" : ""}`} key={photo.id}>{photo.url ? <img src={photo.url} alt="" /> : <div className="photo-uploading">{photo.error ? "Upload failed" : "Uploading…"}</div>}<b>{index + 1}. {photo.name}</b>{!photo.error && photo.progress < 100 && <div className="upload-progress"><span style={{ width: `${photo.progress}%` }} /></div>}{photo.error && <small className="photo-error-text">Upload failed — use Replace to try again.</small>}<div className="hero-actions"><button className="btn" onClick={() => reorderPhoto(index, -1)}>Up</button><button className="btn" onClick={() => reorderPhoto(index, 1)}>Down</button><button className="btn" onClick={() => replacePhoto(index)}>Replace</button><button className="btn" onClick={() => setPhotos(photos.filter((item) => item.id !== photo.id))}>Remove</button></div></article>)}</div><Link className="btn" to="/photography">Don't have professional photos? Book Photography with Hilltro</Link></div>}
           {step === 9 && <div className="form-grid"><h2>Upload Floorplan</h2><p className="muted">Optional but encouraged. The floorplan appears as the final gallery image.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFloorplan(event.dataTransfer.files); }} onClick={() => document.getElementById("floorplan-upload")?.click()}><div><b>Drag floorplan here or click to upload</b><p className="muted">Image or PDF accepted. You can replace it later.</p></div><input id="floorplan-upload" type="file" accept="image/*,.pdf" hidden onChange={(event) => event.target.files && addFloorplan(event.target.files)} /></div>{floorplan && <article className="photo-preview single-media-preview"><img src={floorplan.url} alt="" /><b>{floorplan.name}</b><div className="upload-progress"><span style={{ width: `${floorplan.progress}%` }} /></div><button className="btn" type="button" onClick={() => setFloorplan(null)}>Remove floorplan</button></article>}</div>}
           {step === 10 && <div className="form-grid"><h2>Upload Property Video</h2><p className="muted">Properties with video tours typically let faster. Upload a short vertical walkthrough or provide a supported video link.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addVideo(event.dataTransfer.files); }} onClick={() => document.getElementById("video-upload")?.click()}><div><b>Drag video here or click to upload</b><p className="muted">Maximum upload size 200MB. YouTube, Vimeo and reputable hosted links are supported.</p></div><input id="video-upload" type="file" accept="video/*" hidden onChange={(event) => event.target.files && addVideo(event.target.files)} /></div><label className={missing.has("videoUrl") ? "required-missing" : ""}>External video link (optional)<input value={videoUrl} onChange={(event) => updateVideoUrl(event.target.value)} placeholder="https://youtu.be/..." />{(videoError || missing.has("videoUrl")) && <small>{videoError || "Use a supported video URL before continuing."}</small>}</label>{videoTour && <article className="photo-preview single-media-preview"><video src={videoTour.url} controls /><b>{videoTour.name}</b><div className="upload-progress"><span style={{ width: `${videoTour.progress}%` }} /></div><button className="btn" type="button" onClick={() => setVideoTour(null)}>Remove video</button></article>}</div>}
           {step === 11 && <div><h2>Preview listing</h2><p className="muted">Review photos, address privacy, rental price, description and property summary before publishing.</p><p><b>{addressLine1 ? `${addressLine1}, ${town}` : "Address pending"}</b></p><p>£{(rent || recommendedRent).toLocaleString()} pcm · {details.bedrooms} bed · {details.propertyType}{needsFloor && details.floor ? ` · ${details.floor}` : ""}{floorNeedsLift && details.hasLift ? ` · ${details.hasLift === "Yes" ? "Lift" : "No lift"}` : ""}</p>{availableFrom && <p className="muted">Available from {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(availableFrom))}</p>}{floorplan && <p className="badge">Floorplan attached</p>}{(videoUrl || videoTour) && <p className="badge orange">Video tour attached</p>}{specialFeatures.length > 0 && <div className="feature-pill-grid compact">{specialFeatures.map((feature) => <span className="feature-pill" key={feature}>{feature}</span>)}</div>}<button className="btn primary" onClick={publishListing}>Publish Listing</button></div>}
           <div className="hero-actions" style={{ marginTop: 24 }}>
-            <button className="btn" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
+            <button className="btn" disabled={step === 0} onClick={() => { setMissing(new Set()); setStep(step - 1); }}>Back</button>
             {step < steps.length - 1 && <button className="btn primary" onClick={continueFlow}>Continue</button>}
             <button className="btn" onClick={saveAndFinishLater}>Save and Finish Later</button>
           </div>

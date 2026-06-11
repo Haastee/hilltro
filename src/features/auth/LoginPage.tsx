@@ -40,8 +40,13 @@ export function LoginPage({ onAuth }: { onAuth: (user: User) => void }) {
       setSuccess("Signed in. Opening your workspace...");
       onAuth(user);
       window.setTimeout(() => navigate(user.role === "LANDLORD" ? "/landlord" : "/tenant"), 280);
-    } catch {
-      setError("Those details did not match an account. Check the password or reset it securely.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (/email not confirmed|not confirmed|confirm your email/i.test(message)) {
+        setError("Please confirm your email first. Open the confirmation link we sent you, then log in.");
+      } else {
+        setError("Those details did not match an account. Check the password or reset it securely.");
+      }
       setPasswordValue("");
       window.setTimeout(() => passwordRef.current?.focus(), 30);
     } finally {

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, MailCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authService } from "../../app/services";
 import { CountryDialCodePicker, dialCodeFromPickerValue } from "../../components/CountryDialCodePicker";
@@ -30,6 +30,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [values, setValues] = useState<RegistrationState>({
     role: initialRole,
     firstName: "",
@@ -57,6 +58,37 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
   }, [values.profileImage]);
 
   const strong = values.password.length >= 8 && /[A-Z]/.test(values.password) && /[a-z]/.test(values.password) && /\d/.test(values.password) && /[^A-Za-z0-9]/.test(values.password);
+
+  async function completeRegistration(profileImage: File | null = values.profileImage) {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await authService.register({
+        firstName: values.firstName.trim(),
+        middleName: values.middleName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim(),
+        phone: `${dialCodeFromPickerValue(values.country)} ${values.phone.trim()}`,
+        password: values.password,
+        role: values.role,
+        profileImage
+      });
+      // Email confirmation required: the account exists but has no session yet.
+      // Show the "check your email" state — do NOT route into the dashboard,
+      // because every authenticated write would silently fail under RLS until
+      // the user confirms.
+      if (result.status === "confirm") {
+        setConfirmEmail(result.email);
+        return;
+      }
+      onAuth(result.user);
+      navigate(params.get("next") || (result.user.role === "LANDLORD" ? "/landlord" : "/tenant"));
+    } catch (err) {
+      setError(registrationErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
   const steps = useMemo(() => {
     const sharedSteps = [
     {
@@ -198,7 +230,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
           onChange={(profileImage) => setValues({ ...values, profileImage })}
           onSkip={() => {
             setValues({ ...values, profileImage: null });
-            setError("");
+            completeRegistration(null);
           }}
         />
       ),
@@ -210,6 +242,29 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
 
   const current = steps[step];
   const progress = ((step + 1) / steps.length) * 100;
+
+  if (confirmEmail) {
+    return (
+      <main className="premium-auth-page">
+        <section className="auth-shell premium-auth-shell register-typeform-shell">
+          <div className="auth-copy premium-auth-copy">
+            <p className="eyebrow">Almost there</p>
+            <h1>Confirm your email.</h1>
+            <p>Your account is created. Confirm your email to activate it and keep your listings secure.</p>
+          </div>
+          <div className="premium-auth-card typeform-register-card confirm-email-card">
+            <span className="confirm-email-icon"><MailCheck size={28} /></span>
+            <h2>Check your inbox</h2>
+            <p className="muted">We sent a confirmation link to <b>{confirmEmail}</b>. Click it to activate your account, then log in to start listing.</p>
+            <p className="muted">Can't find it? Check your spam or promotions folder — the email can take a minute to arrive.</p>
+            <div className="hero-actions register-step-actions">
+              <Link className="btn primary" to={`/login${confirmEmail ? `?email=${encodeURIComponent(confirmEmail)}` : ""}`}>Go to log in <ArrowRight size={18} /></Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   function next() {
     if (!current.valid) {
@@ -230,26 +285,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
       setError(current.error || "Complete the required fields before continuing.");
       return;
     }
-    setLoading(true);
-    setError("");
-    try {
-      const user = await authService.register({
-        firstName: values.firstName.trim(),
-        middleName: values.middleName.trim(),
-        lastName: values.lastName.trim(),
-        email: values.email.trim(),
-        phone: `${dialCodeFromPickerValue(values.country)} ${values.phone.trim()}`,
-        password: values.password,
-        role: values.role,
-        profileImage: values.profileImage
-      });
-      onAuth(user);
-      navigate(params.get("next") || (user.role === "LANDLORD" ? "/landlord" : "/tenant"));
-    } catch (err) {
-      setError(registrationErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+    completeRegistration();
   }
 
   return (

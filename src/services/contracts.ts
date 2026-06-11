@@ -9,9 +9,17 @@ export type SearchFilters = {
   radiusMiles?: number;
 };
 
+// Registration either signs the user straight in (no email confirmation
+// required) or creates the account and waits for the user to confirm via the
+// link emailed to them — in which case there is no session yet, so the app must
+// NOT pretend the user is logged in.
+export type RegisterResult =
+  | { status: "active"; user: User }
+  | { status: "confirm"; email: string };
+
 export interface AuthService {
   currentUser(): Promise<User | null>;
-  register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<User>;
+  register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<RegisterResult>;
   login(email: string, password: string): Promise<User>;
   logout(): Promise<void>;
 }
