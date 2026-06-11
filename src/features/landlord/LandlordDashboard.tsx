@@ -50,8 +50,8 @@ export function LandlordDashboard({ user }: { user: User }) {
         <div className="dashboard-hero-copy">
           <p className="badge orange">Landlord operations</p>
           <div className="dashboard-profile-line"><HilltroAvatar name={user.firstName} imageUrl={user.profileImageUrl || profile.profilePhotoUrl} /><span>{profile.landlordType}</span></div>
-          <h1>Ready to let your next property, {firstNameForGreeting(user)}?</h1>
-          <p>Manage listings, verified renters, viewings, offers, rent collection and arrears from one operational workspace.</p>
+          <h1>Manage everything for your properties in one place, {firstNameForGreeting(user)}.</h1>
+          <p>Every viewing, message, offer and contract — everything you need to rent and manage your properties, all under one tab.</p>
           <div className="hero-actions"><Link className="btn primary" to="/landlord/properties">My Properties</Link><Link className="btn light" to="/landlord/properties/new">Create listing</Link><Link className="btn light" to="/photography">Book photography</Link></div>
         </div>
 

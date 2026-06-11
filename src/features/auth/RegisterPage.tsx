@@ -118,6 +118,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
         <div className="form-grid">
           <p className="form-note">* Required field</p>
           <FloatingInput label="First Name *" autoComplete="given-name" value={values.firstName} onChange={(event) => setValues({ ...values, firstName: event.target.value })} required />
+          <p className="field-subhint">As it appears on your passport.</p>
         </div>
       ),
       valid: Boolean(values.firstName.trim()),
@@ -142,6 +143,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
         <div className="form-grid">
           <p className="form-note">* Required field</p>
           <FloatingInput label="Last Name *" autoComplete="family-name" value={values.lastName} onChange={(event) => setValues({ ...values, lastName: event.target.value })} required />
+          <p className="field-subhint">As it appears on your passport.</p>
         </div>
       ),
       valid: Boolean(values.lastName.trim()),

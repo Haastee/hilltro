@@ -28,7 +28,11 @@ export function PropertyOnboarding() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const resumeStep = params.get("resume");
-  const initialStep = resumeStep === "details" ? 1 : resumeStep === "valuation" ? 7 : resumeStep === "photos" ? 8 : 0;
+  // `resume` accepts either a named key (legacy deep-links) or an exact numeric
+  // step so a draft can reopen precisely where the user left off.
+  const namedResume: Record<string, number> = { address: 0, details: 1, rooms: 2, features: 3, description: 4, special: 5, availability: 6, valuation: 7, photos: 8, floorplan: 9, video: 10, preview: 11 };
+  const numericResume = resumeStep !== null && /^\d+$/.test(resumeStep) ? Number(resumeStep) : null;
+  const initialStep = numericResume !== null ? numericResume : (resumeStep ? namedResume[resumeStep] ?? 0 : 0);
   const [step, setStep] = useState(initialStep);
   const [postcode, setPostcode] = useState("");
   const [postcodeData, setPostcodeData] = useState<PostcodeLookup | null>(null);

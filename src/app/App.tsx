@@ -27,7 +27,6 @@ import { MessagesPage } from "../features/messages/MessagesPage";
 import { PhotographyPage } from "../features/photography/PhotographyPage";
 import { AboutPage, ContactPage, FaqPage, HowItWorksPage, LandlordsPage, OfferTermsPage, PrivacyPage, TenantsPage, TermsPage } from "../features/info/InfoPages";
 import { LandlordWorkspacePage, TenantWorkspacePage, type LandlordPageKey, type TenantPageKey } from "../features/workspace/WorkspacePages";
-import { landlordStats } from "../data/landlordProperties";
 import { ProfilePage } from "../features/profile/ProfilePage";
 
 const tenantNav = [
@@ -39,13 +38,14 @@ const tenantNav = [
   ["/tenant/payments", "Payments"]
 ];
 
+// Landlord navigation order (Add Property is rendered separately as the primary
+// CTA so it always sits last). Plain labels — no fabricated activity counts.
 const landlordNav = [
   ["/landlord/properties", "My Properties"],
   ["/landlord/viewings", "Viewings"],
-  ["/search", "Search"],
   ["/messages", "Messages"],
-  ["/landlord/offers", "Deals"],
-  ["/landlord/payments", "Payments"]
+  ["/landlord/payments", "Payments"],
+  ["/search", "Search Properties"]
 ];
 
 export function App() {
@@ -70,13 +70,7 @@ export function App() {
   const nav = useMemo(() => {
     if (!user) return [["/", "Home"], ["/search", "Search"], ["/how-it-works", "How it works"], ["/login", "Log in"]];
     if (user.role === "TENANT") return tenantNav;
-    const stats = landlordStats();
-    return landlordNav.map(([href, label]) => {
-          if (href === "/landlord/viewings") return [href, `Viewings (${stats.viewingRequests})`];
-          if (href === "/messages") return [href, `Messages (${stats.messages})`];
-      if (href === "/landlord/offers") return [href, `Deals (${stats.deals})`];
-      return [href, label];
-    });
+    return landlordNav;
   }, [user]);
 
   const homeTarget = user?.role === "LANDLORD" ? "/landlord" : user?.role === "TENANT" ? "/tenant" : "/";
@@ -163,22 +157,25 @@ export function App() {
         <Route path="/photography" element={<Protected user={user} ready={authReady} role="LANDLORD"><PhotographyPage /></Protected>} />
         <Route path="*" element={<Navigate to={homeTarget} />} />
       </Routes>
-      <Footer />
+      <Footer user={user} />
     </div>
   );
 }
 
-function Footer() {
-  const links = [
-    ["/faq", "FAQ"],
+function Footer({ user }: { user: User | null }) {
+  // Shared platform links are visible to everyone. Audience-specific links are
+  // hidden from the opposite role: landlords never see tenant navigation, and
+  // tenants never see landlord navigation.
+  const links: [string, string][] = [
+    ["/about", "About"],
     ["/how-it-works", "How It Works"],
     ["/privacy", "Privacy Policy"],
     ["/terms", "Terms & Conditions"],
     ["/offer-terms", "Offer Terms"],
-    ["/about", "About"],
+    ["/faq", "FAQ"],
     ["/contact", "Contact"],
-    ["/landlords", "Landlords"],
-    ["/tenants", "Tenants"]
+    ...(user?.role === "TENANT" ? [] : [["/landlords", "Landlords"] as [string, string]]),
+    ...(user?.role === "LANDLORD" ? [] : [["/tenants", "Tenants"] as [string, string]])
   ];
   return (
     <footer className="site-footer">

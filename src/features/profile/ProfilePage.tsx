@@ -4,14 +4,28 @@ import { Trash2, UploadCloud } from "lucide-react";
 import type { User } from "../../types/domain";
 import { HilltroAvatar } from "../../components/HilltroAvatar";
 import { storageService } from "../../services/storageService";
+import { supabase, hasSupabaseConfig } from "../../utils/supabase";
 
 const PROFILE_KEY = "hilltro.profile.local";
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 type ProfileState = User & { about?: string };
+
+function readAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read that image."));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: (user: User | null) => void }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileState>(() => loadProfile(user));
   const [photoPreview, setPhotoPreview] = useState(profile.profileImageUrl || "");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [photoStatus, setPhotoStatus] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const [challenge, setChallenge] = useState("");
@@ -21,12 +35,59 @@ export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: 
     onUserChange(profile);
   }, [onUserChange, profile]);
 
+  async function persistProfileImageUrl(url: string | null) {
+    // Persist to Supabase for a real signed-in user; demo/local sessions keep
+    // the value in localStorage only (handled by the profile effect above).
+    if (!hasSupabaseConfig) return;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return;
+    const { error } = await supabase.from("profiles").update({ profile_image_url: url }).eq("id", profile.id);
+    if (error) throw new Error(error.message);
+  }
+
   async function uploadPhoto(fileList: FileList | null) {
+    setPhotoError("");
+    setPhotoStatus("");
     const file = [...(fileList || [])].find((item) => item.type.startsWith("image/"));
-    if (!file || file.size > 5 * 1024 * 1024) return;
-    const upload = await storageService.uploadProfileImage(profile.id, file);
-    setPhotoPreview(upload.url);
-    setProfile({ ...profile, profileImageUrl: upload.url });
+    if (!file) {
+      setPhotoError("Choose an image file (JPG or PNG).");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoError("That image is larger than 5MB. Please choose a smaller file.");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const signedIn = hasSupabaseConfig && Boolean((await supabase.auth.getSession()).data.session);
+      // Real session → store in Supabase Storage + profiles row. Demo/local
+      // session has no Supabase auth, so keep a local copy that still persists.
+      const url = signedIn ? (await storageService.uploadProfileImage(profile.id, file)).url : await readAsDataUrl(file);
+      await persistProfileImageUrl(url);
+      setPhotoPreview(url);
+      setProfile({ ...profile, profileImageUrl: url });
+      setPhotoStatus("Profile photo updated.");
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : "Upload failed. Please try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function deletePhoto() {
+    setPhotoError("");
+    setPhotoStatus("");
+    setPhotoBusy(true);
+    try {
+      await persistProfileImageUrl(null);
+      setPhotoPreview("");
+      setProfile({ ...profile, profileImageUrl: "" });
+      setPhotoStatus("Profile photo removed.");
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : "Could not remove the photo. Please try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   function deleteAccount() {
@@ -48,9 +109,13 @@ export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: 
         <article className="card form-grid">
           <div className="profile-photo-row">
             <HilltroAvatar name={profile.firstName} imageUrl={photoPreview} size="xl" />
-            <div className="hero-actions">
-              <label className="btn primary"><UploadCloud size={17} /> Upload photo<input hidden type="file" accept="image/*" onChange={(event) => uploadPhoto(event.target.files)} /></label>
-              {photoPreview && <button className="btn" type="button" onClick={() => { setPhotoPreview(""); setProfile({ ...profile, profileImageUrl: "" }); }}>Delete photo</button>}
+            <div className="profile-photo-controls">
+              <div className="hero-actions">
+                <label className={`btn primary ${photoBusy ? "is-disabled" : ""}`}><UploadCloud size={17} /> {photoBusy ? "Uploading…" : photoPreview ? "Replace photo" : "Upload photo"}<input hidden type="file" accept="image/*" disabled={photoBusy} onChange={(event) => { uploadPhoto(event.target.files); event.target.value = ""; }} /></label>
+                {photoPreview && <button className="btn" type="button" disabled={photoBusy} onClick={deletePhoto}><Trash2 size={16} /> Delete photo</button>}
+              </div>
+              {photoError && <p className="notice error photo-feedback">{photoError}</p>}
+              {!photoError && photoStatus && <p className="notice success photo-feedback">{photoStatus}</p>}
             </div>
           </div>
           <p className="form-note">* Required field</p>

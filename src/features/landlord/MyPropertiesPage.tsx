@@ -174,11 +174,11 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
           {drafts.map((draft) => (
             <article className="managed-property card" key={draft.id}>
               <div className="managed-main">
-                <div className="managed-title"><span className="status-pill draft">Draft</span><h2>{draft.address}</h2></div>
+                <div className="managed-title"><span className="status-pill draft">Draft</span><Link className="draft-address-link" to={`/landlord/properties/new?propertyId=${draft.id}&resume=${draft.step}`}><h2>{draft.address}</h2></Link></div>
                 <p className="muted">{draft.bedrooms} bed · {draft.bathrooms} bath · updated {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updatedAt))}</p>
               </div>
               <div className="property-actions">
-                <Link className="btn primary" to={`/landlord/properties/new?propertyId=${draft.id}`}>Finish Listing</Link>
+                <Link className="btn primary" to={`/landlord/properties/new?propertyId=${draft.id}&resume=${draft.step}`}>Finish Listing</Link>
                 <button className="btn" type="button" onClick={() => setDeleteDraft(draft)}>Delete Draft</button>
               </div>
             </article>

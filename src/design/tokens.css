@@ -75,6 +75,17 @@ img { max-width: 100%; display: block; }
 .avatar-nav-link { display: inline-flex; border-radius: 999px; box-shadow: 0 0 0 1px rgba(214,224,227,.9); transition: .16s ease; }
 .avatar-nav-link:hover, .avatar-nav-link.active { box-shadow: 0 0 0 4px rgba(var(--color-brand-rgb),.12); }
 .nav-primary-cta { min-height: auto; display: inline-flex; align-items: center; border-radius: 999px; padding: 8px 16px !important; background: var(--color-orange); color: white !important; font-size: .92rem; box-shadow: 0 8px 20px rgba(var(--color-brand-rgb),.20); }
+/* The Add Property CTA must stay orange in every state. Without this, the
+   generic `.nav a.active`/`.nav a:hover` rule (higher specificity than
+   `.nav-primary-cta`) repaints it with a grey tint + grey-blue text whenever it
+   is the active route or hovered at the top of the page — only the scrolled
+   state happened to override it back to orange, which is what produced the
+   "grey on return to top" bug. */
+.topbar .nav a.nav-primary-cta,
+.topbar .nav a.nav-primary-cta.active,
+.topbar.scrolled .nav a.nav-primary-cta { background: var(--color-orange); color: #fff !important; box-shadow: 0 8px 20px rgba(var(--color-brand-rgb),.20); }
+.topbar .nav a.nav-primary-cta:hover,
+.topbar.scrolled .nav a.nav-primary-cta:hover { background: var(--color-brand-hover); color: #fff !important; }
 .page { position: relative; padding: clamp(28px, 5vw, 64px); }
 .app-shell { min-height: 100vh; background: radial-gradient(circle at 88% 8%, rgba(var(--color-brand-rgb),.10), transparent 28rem), radial-gradient(circle at 4% 28%, rgba(61,83,91,.10), transparent 26rem), linear-gradient(180deg, #fbfcfc 0%, #f3f7f7 48%, #fbfcfc 100%); }
 .page::before { content: ""; position: absolute; inset: 24px auto auto 64%; z-index: -1; width: min(620px, 56vw); height: 260px; border-radius: 999px; background: linear-gradient(115deg, rgba(var(--color-brand-rgb),.10), rgba(255,255,255,.06), rgba(61,83,91,.10)); filter: blur(10px); pointer-events: none; }
@@ -100,6 +111,9 @@ img { max-width: 100%; display: block; }
 .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 label { display: grid; gap: 7px; color: var(--color-muted); font-weight: 600; }
 .form-note { margin: 0; color: var(--color-muted); font-size: .84rem; font-weight: 600; }
+.field-subhint { margin: -6px 0 0; color: var(--color-muted); font-size: .8rem; font-weight: 500; }
+.draft-address-link { text-decoration: none; color: inherit; }
+.draft-address-link:hover h2 { color: var(--color-orange-ink); text-decoration: underline; text-underline-offset: 3px; }
 .form-hint { display: flex; align-items: center; gap: 7px; margin: 2px 0 0; color: var(--color-muted); font-size: 13px; line-height: 1.45; }
 .form-hint svg { flex: none; color: var(--color-success); }
 input, select, textarea { min-height: 48px; border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 0 14px; background: white; color: var(--color-text); transition: .16s ease; }
@@ -472,6 +486,21 @@ body {
 .dash-feature-label span { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 999px; background: var(--color-brand-soft); color: var(--color-brand); font-size: 11px; font-weight: 600; }
 .dash-feature-copy { margin: 0 0 2px; color: var(--color-muted); font-size: 12.5px; line-height: 1.45; }
 .dash-card { position: static; padding: 16px 18px; animation: none; }
+/* Composition only: stagger the workflow example cards left/right with a subtle
+   tilt and depth so they read as separate, layered stages of the process rather
+   than one aligned column. Styling and content are unchanged. */
+.dashboard-hero-visual { gap: 22px; }
+.dash-feature { position: relative; transition: transform .22s ease; }
+.dash-feature:nth-child(odd) .dash-card { transform: translateX(-16px) rotate(-1.1deg); }
+.dash-feature:nth-child(even) .dash-card { transform: translateX(20px) rotate(1.2deg); }
+.dash-feature:nth-child(2) { z-index: 3; }
+.dash-feature:nth-child(1) { z-index: 2; }
+.dash-feature .dash-card { transition: transform .22s ease, box-shadow .22s ease; }
+.dash-feature .dash-card:hover { transform: translateX(0) rotate(0deg); box-shadow: 0 28px 64px rgba(16,24,32,.16); }
+@media (max-width: 720px) {
+  .dash-feature:nth-child(odd) .dash-card { transform: translateX(-7px) rotate(-0.8deg); }
+  .dash-feature:nth-child(even) .dash-card { transform: translateX(9px) rotate(0.8deg); }
+}
 .dash-applicant { display: grid; gap: 12px; box-shadow: 0 24px 60px rgba(16,24,32,.12); }
 .dash-applicant-head { display: flex; align-items: center; gap: 12px; }
 .dash-applicant-head .hilltro-avatar { flex: none; }
@@ -818,6 +847,9 @@ input[type="file"]::file-selector-button:hover { border-color: var(--color-orang
 .profile-settings-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
 .single-column-profile { max-width: 920px; margin: 0 auto; grid-template-columns: 1fr; }
 .profile-photo-row { display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.profile-photo-controls { display: grid; gap: 10px; }
+.photo-feedback { margin: 0; font-size: .86rem; }
+.btn.is-disabled { opacity: .6; pointer-events: none; }
 .danger-zone { border-color: rgba(190,49,49,.18); background: linear-gradient(180deg, #fff, #fff8f7); }
 .danger-zone svg { color: #be3131; }
 .subtle-danger-zone { margin-top: 24px; display: grid; gap: 8px; border-top: 1px solid rgba(190,49,49,.16); padding-top: 24px; background: transparent; color: var(--color-muted); }
