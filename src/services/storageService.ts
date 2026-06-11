@@ -37,12 +37,37 @@ export class LocalStorageService implements StorageService {
   }
 }
 
+// Storage uploads are authenticated writes guarded by RLS (auth.uid() must be
+// set). supabase-js resolves the bearer token per request via auth.getSession(),
+// but on a fresh page load the session is restored asynchronously — if an upload
+// fires before that completes, getSession() returns null, the request falls back
+// to the anon key, and the storage INSERT is rejected ("new row violates
+// row-level security policy for table objects"). Awaiting an authenticated
+// session here guarantees the token is hydrated before the upload, and surfaces
+// a clear error if the user genuinely is not signed in.
+async function requireSession() {
+  const { supabase } = await import("../utils/supabase");
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message);
+  if (!data.session) {
+    throw new Error("You need to be signed in to upload files. Please log in and try again.");
+  }
+  return supabase;
+}
+
+// Object keys must avoid spaces and other characters that break the storage
+// path/URL (e.g. "Screenshot 2026-06-05 125803.png").
+function safeKey(fileName: string) {
+  const cleaned = fileName.normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `${crypto.randomUUID()}-${cleaned || "file"}`;
+}
+
 export class SupabaseStorageService implements StorageService {
   async uploadImage(file: File, onProgress?: (progress: number) => void): Promise<StoredUpload> {
-    const { supabase } = await import("../utils/supabase");
+    const supabase = await requireSession();
     onProgress?.(18);
-    const path = `${crypto.randomUUID()}-${file.name}`;
-    const { error } = await supabase.storage.from("property-photos").upload(path, file, { upsert: true });
+    const path = safeKey(file.name);
+    const { error } = await supabase.storage.from("property-photos").upload(path, file, { upsert: true, contentType: file.type || undefined });
     if (error) throw new Error(error.message);
     onProgress?.(82);
     const { data } = supabase.storage.from("property-photos").getPublicUrl(path);
@@ -51,21 +76,22 @@ export class SupabaseStorageService implements StorageService {
   }
 
   async uploadProfileImage(userId: string, file: File, onProgress?: (progress: number) => void): Promise<StoredUpload> {
-    const { supabase } = await import("../utils/supabase");
+    const supabase = await requireSession();
     onProgress?.(18);
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const path = `${userId}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabase.storage.from("profile-images").upload(path, file, { upsert: true });
+    // The public URL is stored directly on profiles.profile_image_url by the
+    // caller — there is no separate profile_images table.
+    const { error } = await supabase.storage.from("profile-images").upload(path, file, { upsert: true, contentType: file.type || undefined });
     if (error) throw new Error(error.message);
     onProgress?.(82);
     const { data } = supabase.storage.from("profile-images").getPublicUrl(path);
-    await supabase.from("profile_images").insert({ user_id: userId, image_url: data.publicUrl, storage_path: path });
     onProgress?.(100);
     return { name: path, url: data.publicUrl, size: file.size, type: file.type };
   }
 
   async uploadVideo(file: File, onProgress?: (progress: number) => void): Promise<StoredUpload> {
-    const { supabase } = await import("../utils/supabase");
+    const supabase = await requireSession();
     onProgress?.(18);
     const extension = file.name.split(".").pop()?.toLowerCase() || "mp4";
     const path = `${crypto.randomUUID()}.${extension}`;
@@ -78,9 +104,8 @@ export class SupabaseStorageService implements StorageService {
   }
 
   async deleteProfileImage(path: string) {
-    const { supabase } = await import("../utils/supabase");
+    const supabase = await requireSession();
     await supabase.storage.from("profile-images").remove([path]);
-    await supabase.from("profile_images").delete().eq("storage_path", path);
   }
 }
 

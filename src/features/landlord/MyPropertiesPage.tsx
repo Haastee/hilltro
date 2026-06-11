@@ -36,6 +36,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
       if (import.meta.env.VITE_SUPABASE_URL) {
         if (isDemoLandlordSession()) {
           setProperties(managedProperties);
+          setDrafts(loadPropertyDrafts());
           return;
         }
         const { data: user } = await supabase.auth.getUser();

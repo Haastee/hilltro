@@ -553,9 +553,13 @@ export function PropertyOnboarding() {
               <span className="badge orange">Rental valuation</span>
               <h2>Recommended Monthly Rent</h2>
               <p>Based on similar properties in your area we estimate a monthly rent of <b>£{recommendedRent.toLocaleString("en-GB")}</b>.</p>
-              <div className="form-grid two">
-                <label className={missing.has("rent") ? "required-missing" : ""}>Your monthly rent *<input type="number" value={rent} onChange={(event) => setRent(event.target.value)} placeholder={String(recommendedRent)} />{missing.has("rent") && <small>Confirm your asking rent or use the Hilltro recommendation.</small>}</label>
-                <button className="btn primary" onClick={() => setRent(String(recommendedRent))}>Try Hilltro recommended price</button>
+              <div className={`valuation-rent ${missing.has("rent") ? "required-missing" : ""}`}>
+                <label htmlFor="valuation-rent-input">Your monthly rent *</label>
+                <div className="rent-input-group">
+                  <input id="valuation-rent-input" type="number" inputMode="numeric" value={rent} onChange={(event) => setRent(event.target.value)} placeholder={String(recommendedRent)} />
+                  <button type="button" className="btn primary rent-estimate-btn" onClick={() => setRent(String(recommendedRent))}>Use Hilltro estimate</button>
+                </div>
+                {missing.has("rent") && <small>Confirm your asking rent or use the Hilltro recommendation.</small>}
               </div>
             </div>
           )}

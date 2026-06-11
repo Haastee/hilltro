@@ -1,13 +1,49 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BadgeCheck, BadgePoundSterling, Check, FileText, MessageSquare } from "lucide-react";
 import type { User } from "../../types/domain";
 import { firstNameForGreeting } from "../../utils/name";
 import { landlordById, landlordStats } from "../../data/landlordProperties";
+import { isDemoLandlordSession } from "../../services/supabaseServices";
+import { supabase } from "../../utils/supabase";
 import { HilltroAvatar } from "../../components/HilltroAvatar";
 
+type LandlordStats = { propertiesListed: number; viewingRequests: number; offers: number; messages: number };
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+
 export function LandlordDashboard({ user }: { user: User }) {
-  const stats = landlordStats();
   const profile = landlordById();
+  // Demo landlord keeps the illustrative numbers; every real account shows live
+  // counts derived from its own database records (zeros for a brand-new user).
+  const demo = !useSupabase || isDemoLandlordSession();
+  const [stats, setStats] = useState<LandlordStats>(() => (demo ? landlordStats() : { propertiesListed: 0, viewingRequests: 0, offers: 0, messages: 0 }));
+
+  useEffect(() => {
+    if (demo) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id;
+      if (!uid) return;
+      const countOf = async (table: string, build?: (q: any) => any) => {
+        let q = supabase.from(table).select("*", { count: "exact", head: true }).eq("landlord_id", uid);
+        if (build) q = build(q);
+        const { count } = await q;
+        return count ?? 0;
+      };
+      const [propertiesListed, viewingRequests, offers, messages] = await Promise.all([
+        countOf("properties", (q) => q.eq("status", "live")),
+        countOf("viewings"),
+        countOf("offers"),
+        countOf("conversations")
+      ]);
+      if (!cancelled) setStats({ propertiesListed, viewingRequests, offers, messages });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [demo, user.id]);
   return (
     <main className="page">
       <section className="hero landlord-dashboard-hero">
