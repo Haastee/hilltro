@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export function HomeHeroRotator({ slides, labels, interval = 6500 }: { slides: ReactNode[]; labels: string[]; interval?: number }) {
+export function HomeHeroRotator({ slides, labels, interval = 4000 }: { slides: ReactNode[]; labels: string[]; interval?: number }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const hasRotated = useRef(false);

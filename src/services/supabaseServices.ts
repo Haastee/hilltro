@@ -36,6 +36,7 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<User> {
+    if (!input.email?.trim() || !input.password) throw new Error("Enter your email and password to create an account.");
     const name = displayName(input);
     const { data, error } = await supabase.auth.signUp({
       email: input.email,

@@ -222,7 +222,14 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!current.valid) return next();
+    // Enter/submit on any step before the last must only advance — never call
+    // register early (which would signUp with an empty email/password and
+    // surface a confusing "anonymous sign-ins are disabled" error).
+    if (step < steps.length - 1) return next();
+    if (!current.valid) {
+      setError(current.error || "Complete the required fields before continuing.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
