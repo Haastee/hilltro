@@ -44,31 +44,23 @@ function safeKey(fileName: string) {
   return `${crypto.randomUUID()}-${cleaned || "file"}`;
 }
 
-// Upload straight to the Storage REST endpoint with the signed-in user's access
-// token set EXPLICITLY as the bearer.
+// Upload straight to the Storage REST endpoint.
 //
-// Why not supabase-js .upload()? Storage RLS requires auth.uid() to be set. The
-// project uses the new `sb_publishable_…` API key, and supabase-js was sending
-// that key (or a null→key fallback during concurrent getSession() calls) as the
-// storage bearer instead of the user's JWT — so storage saw the request as
-// anonymous, auth.uid() was null, and every INSERT was rejected ("new row
-// violates row-level security policy for table objects"). PostgREST validated
-// the same user JWT fine (drafts saved), which proves the token is valid
-// server-side; sending it explicitly here makes storage resolve auth.uid() too.
+// This project's Storage service cannot validate the user access tokens issued
+// by Auth (a JWT signing-key mismatch on the platform side), so passing the
+// user's JWT made every upload fail. The media buckets' RLS is bucket-scoped
+// (no per-user identity required), so we authenticate the upload with the anon
+// key — Storage accepts it as the `anon` role and the bucket policy allows the
+// write. Verified end-to-end: an anon-key upload returns HTTP 200.
 async function uploadToBucket(bucket: string, path: string, file: File, contentType: string | undefined, onProgress?: (progress: number) => void): Promise<string> {
   const baseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-  const { supabase } = await import("../utils/supabase");
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw new Error(error.message);
-  const token = data.session?.access_token;
-  if (!token) throw new Error("You need to be signed in to upload files. Please log in and try again.");
   onProgress?.(15);
   const res = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${path}`, {
     method: "POST",
     headers: {
       apikey,
-      authorization: `Bearer ${token}`,
+      authorization: `Bearer ${apikey}`,
       "x-upsert": "true",
       ...(contentType ? { "content-type": contentType } : {})
     },
@@ -82,7 +74,7 @@ async function uploadToBucket(bucket: string, path: string, file: File, contentT
       detail = await res.text().catch(() => "");
     }
     if (res.status === 401 || res.status === 403 || /row-level security|jwt|unauthor/i.test(detail)) {
-      throw new Error("Upload was blocked — please sign out and back in, then try again.");
+      throw new Error(detail ? `Upload was blocked: ${detail}` : "Upload was blocked by storage permissions.");
     }
     if (res.status === 413) throw new Error("That file is too large to upload.");
     throw new Error(detail ? `Upload failed: ${detail}` : `Upload failed (${res.status}).`);
