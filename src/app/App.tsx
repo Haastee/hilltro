@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import { HilltroAvatar } from "../components/HilltroAvatar";
 import type { User } from "../types/domain";
 import { authService } from "./services";
@@ -44,6 +44,7 @@ const landlordNav = [
   ["/landlord/properties", "My Properties"],
   ["/landlord/viewings", "Viewings"],
   ["/messages", "Messages"],
+  ["/landlord/offers", "Deals"],
   ["/landlord/payments", "Payments"],
   ["/search", "Search Properties"]
 ];
@@ -112,6 +113,7 @@ export function App() {
         <nav className={`nav ${menuOpen ? "open" : ""}`}>
           {nav.map(([href, label]) => <NavLink key={href} to={href} className={({ isActive }) => [navClassFor(href) || (isActive ? "active" : undefined), user?.role === "TENANT" && href === "/referencing" ? "nav-attention" : ""].filter(Boolean).join(" ") || undefined} onClick={() => setMenuOpen(false)}>{label}</NavLink>)}
           {user?.role === "LANDLORD" && <NavLink className="nav-primary-cta" to="/landlord/properties/new" onClick={() => setMenuOpen(false)}>Add Property</NavLink>}
+          {user && <NavLink className="mobile-profile-link" to="/profile" onClick={() => setMenuOpen(false)}><UserIcon size={16} /> My Profile</NavLink>}
           {user && <button className="btn ghost mobile-logout" onClick={logout}><LogOut size={16} /> Log out</button>}
         </nav>
         {user && <div className="session"><NavLink className="avatar-nav-link" to="/profile" aria-label="My Profile"><HilltroAvatar name={user.firstName} imageUrl={user.profileImageUrl} /></NavLink><button className="btn ghost" onClick={logout}><LogOut size={16} /> Log out</button></div>}
