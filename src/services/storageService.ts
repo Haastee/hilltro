@@ -63,10 +63,13 @@ async function uploadToBucket(bucket: string, path: string, file: File, contentT
   onProgress?.(15);
   const res = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${path}`, {
     method: "POST",
+    // No x-upsert: it makes Storage do INSERT ... ON CONFLICT DO UPDATE, which
+    // fails the row-level security check ("new row violates row-level security
+    // policy"). Every key is a fresh random UUID so there is never a conflict —
+    // a plain insert is correct and is verified to return HTTP 200.
     headers: {
       apikey,
       authorization: `Bearer ${apikey}`,
-      "x-upsert": "true",
       ...(contentType ? { "content-type": contentType } : {})
     },
     body: file
