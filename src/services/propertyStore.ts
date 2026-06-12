@@ -15,6 +15,7 @@ export function savePublishedProperty(property: Property) {
 
 export type PropertyDraft = {
   id: string;
+  ownerId: string;
   title: string;
   address: string;
   postcode: string;
@@ -26,18 +27,28 @@ export type PropertyDraft = {
   payload: unknown;
 };
 
-export function loadPropertyDrafts(): PropertyDraft[] {
+function readAllDrafts(): PropertyDraft[] {
   return JSON.parse(localStorage.getItem(DRAFTS_KEY) || "[]") as PropertyDraft[];
 }
 
+// Drafts are stored per-account. Only the owner's drafts are ever returned, so a
+// draft saved by one landlord can never appear in another landlord's portfolio
+// when they sign in on the same browser. Legacy drafts without an ownerId are
+// intentionally hidden (never shown to anyone) to avoid cross-account leakage.
+export function loadPropertyDrafts(ownerId: string): PropertyDraft[] {
+  if (!ownerId) return [];
+  return readAllDrafts().filter((draft) => draft.ownerId === ownerId);
+}
+
 export function savePropertyDraft(draft: PropertyDraft) {
-  const existing = loadPropertyDrafts().filter((item) => item.id !== draft.id);
+  if (!draft.ownerId) return;
+  const existing = readAllDrafts().filter((item) => item.id !== draft.id);
   localStorage.setItem(DRAFTS_KEY, JSON.stringify([draft, ...existing]));
   window.dispatchEvent(new CustomEvent("hilltro:properties-changed"));
 }
 
 export function deletePropertyDraft(draftId: string) {
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(loadPropertyDrafts().filter((draft) => draft.id !== draftId)));
+  localStorage.setItem(DRAFTS_KEY, JSON.stringify(readAllDrafts().filter((draft) => draft.id !== draftId)));
   window.dispatchEvent(new CustomEvent("hilltro:properties-changed"));
 }
 

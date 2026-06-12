@@ -1,4 +1,4 @@
-import { supabase } from "../utils/supabase";
+import { supabase, hasSupabaseConfig } from "../utils/supabase";
 import type { Conversation, Property, ReferencingStep, TenantPassport, User } from "../types/domain";
 import type { AuthService, MessageService, PhotographerService, PropertyService, RegisterResult, SearchFilters } from "./contracts";
 import { assetUrl } from "../utils/asset";
@@ -23,6 +23,22 @@ export const demoLandlordUser: User = {
 
 export function isDemoLandlordSession() {
   return localStorage.getItem(DEMO_LANDLORD_SESSION_KEY) === "true";
+}
+
+// Identifies who owns browser-local data (e.g. in-progress drafts) so it is
+// scoped to the signed-in account and never leaks to a different user on the
+// same device. Returns "" when nobody is signed in.
+export async function currentLandlordId(): Promise<string> {
+  if (isDemoLandlordSession()) return demoLandlordUser.id;
+  if (!hasSupabaseConfig) {
+    try {
+      return (JSON.parse(localStorage.getItem("hilltro.react.session") || "null") as { id?: string } | null)?.id || "";
+    } catch {
+      return "";
+    }
+  }
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id || "";
 }
 
 export class SupabaseAuthService implements AuthService {

@@ -4,7 +4,7 @@ import { CalendarField } from "../../components/CalendarField";
 import { SelectField } from "../../components/SelectField";
 import { applicantOffers, interestEvents, managedProperties, propertyViewings, type ManagedProperty } from "../../data/landlordProperties";
 import { deletePropertyDraft, loadPropertyDrafts, loadPublishedProperties, type PropertyDraft } from "../../services/propertyStore";
-import { isDemoLandlordSession } from "../../services/supabaseServices";
+import { currentLandlordId, isDemoLandlordSession } from "../../services/supabaseServices";
 import { storageService } from "../../services/storageService";
 import { supabase } from "../../utils/supabase";
 import { assetUrl } from "../../utils/asset";
@@ -23,6 +23,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
   const [relistDate, setRelistDate] = useState("");
   const [query, setQuery] = useState("");
   const [drafts, setDrafts] = useState<PropertyDraft[]>([]);
+  const [ownerId, setOwnerId] = useState("");
   const [deleteDraft, setDeleteDraft] = useState<PropertyDraft | null>(null);
   const [mediaModal, setMediaModal] = useState<ManagedProperty | null>(null);
   const [replaceVideoConfirm, setReplaceVideoConfirm] = useState(false);
@@ -33,15 +34,18 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
 
   useEffect(() => {
     const sync = async () => {
+      const owner = await currentLandlordId();
+      setOwnerId(owner);
       if (import.meta.env.VITE_SUPABASE_URL) {
         if (isDemoLandlordSession()) {
           setProperties(managedProperties);
-          setDrafts(loadPropertyDrafts());
+          setDrafts(loadPropertyDrafts(owner));
           return;
         }
         const { data: user } = await supabase.auth.getUser();
         if (!user.user) {
           setProperties([]);
+          setDrafts([]);
           return;
         }
         const { data } = await supabase
@@ -64,7 +68,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
           videoUrl: row.property_videos?.[0]?.public_url || row.property_videos?.[0]?.external_url,
           metrics: { photos: row.property_photos?.length || 0, floorplans: row.floorplans?.length || 0, viewings: 0, offers: 0, messages: 0 }
         })));
-        setDrafts(loadPropertyDrafts());
+        setDrafts(loadPropertyDrafts(owner));
         return;
       }
       const published = loadPublishedProperties().map<ManagedProperty>((property) => ({
@@ -83,7 +87,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
         metrics: { photos: 1 + (property.imageUrls?.length || 0), floorplans: property.floorplanUrl ? 1 : 0, viewings: 0, offers: 0, messages: 0 }
       }));
       setProperties([...published, ...managedProperties.filter((item) => !published.some((property) => property.id === item.id))]);
-      setDrafts(loadPropertyDrafts());
+      setDrafts(loadPropertyDrafts(owner));
     };
     sync();
     window.addEventListener("hilltro:properties-changed", sync);
@@ -223,7 +227,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
           <div className="card modal-card form-grid">
             <h2>Delete draft?</h2>
             <p className="muted">Are you sure you want to permanently delete this draft?</p>
-            <div className="hero-actions"><button className="btn primary" type="button" onClick={() => { deletePropertyDraft(deleteDraft.id); setDrafts(loadPropertyDrafts()); setDeleteDraft(null); }}>Delete Draft</button><button className="btn" type="button" onClick={() => setDeleteDraft(null)}>Cancel</button></div>
+            <div className="hero-actions"><button className="btn primary" type="button" onClick={() => { deletePropertyDraft(deleteDraft.id); setDrafts(loadPropertyDrafts(ownerId)); setDeleteDraft(null); }}>Delete Draft</button><button className="btn" type="button" onClick={() => setDeleteDraft(null)}>Cancel</button></div>
           </div>
         </div>
       )}

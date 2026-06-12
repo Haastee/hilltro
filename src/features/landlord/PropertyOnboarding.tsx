@@ -5,7 +5,8 @@ import { lookupPostcode, suggestPostcodes } from "../../data/addressLookup";
 import { SelectField } from "../../components/SelectField";
 import { CalendarField } from "../../components/CalendarField";
 import type { PostcodeLookup } from "../../services/postcodesIo";
-import { savePropertyDraft, savePublishedProperty } from "../../services/propertyStore";
+import { deletePropertyDraft, savePropertyDraft, savePublishedProperty } from "../../services/propertyStore";
+import { currentLandlordId } from "../../services/supabaseServices";
 import { storageService } from "../../services/storageService";
 import { supabase } from "../../utils/supabase";
 import { assetUrl } from "../../utils/asset";
@@ -34,6 +35,16 @@ export function PropertyOnboarding() {
   const numericResume = resumeStep !== null && /^\d+$/.test(resumeStep) ? Number(resumeStep) : null;
   const initialStep = numericResume !== null ? numericResume : (resumeStep ? namedResume[resumeStep] ?? 0 : 0);
   const [step, setStep] = useState(initialStep);
+  // Owner of this draft — keeps the in-progress draft scoped to the signed-in
+  // account so it never appears in another landlord's portfolio.
+  const [landlordId, setLandlordId] = useState("");
+  useEffect(() => {
+    let alive = true;
+    currentLandlordId().then((id) => alive && setLandlordId(id));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [postcode, setPostcode] = useState("");
   const [postcodeData, setPostcodeData] = useState<PostcodeLookup | null>(null);
   const [postcodeSuggestions, setPostcodeSuggestions] = useState<string[]>([]);
@@ -84,7 +95,10 @@ export function PropertyOnboarding() {
   }, [postcode]);
 
   useEffect(() => {
-    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    // Wait until we know who is signed in, then restore only THIS account's
+    // in-progress draft (never another user's autosave on the same browser).
+    if (!landlordId) return;
+    const draft = JSON.parse(localStorage.getItem(`${DRAFT_KEY}.${landlordId}`) || "null");
     if (!draft) return;
     if (draft.step !== undefined && !params.get("resume")) setStep(draft.step);
     setPostcode(draft.postcode || "");
@@ -99,14 +113,16 @@ export function PropertyOnboarding() {
     if (draft.floorplan) setFloorplan(draft.floorplan);
     if (draft.videoTour) setVideoTour(draft.videoTour);
     if (draft.videoUrl) setVideoUrl(draft.videoUrl);
-  }, [params]);
+  }, [params, landlordId]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
+      if (!landlordId) return;
       const payload = { step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, photos, floorplan, videoTour, videoUrl };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+      localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify(payload));
       savePropertyDraft({
         id: draftId,
+        ownerId: landlordId,
         title: `${town || "Draft"} ${details.propertyType}`,
         address: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", ") || "Address pending",
         postcode,
@@ -119,7 +135,7 @@ export function PropertyOnboarding() {
       });
     }, 500);
     return () => window.clearTimeout(id);
-  }, [addressLine1, addressLine2, details, draftId, floorplan, photos, postcode, rent, specialFeatures, step, town, videoTour, videoUrl]);
+  }, [addressLine1, addressLine2, details, draftId, floorplan, landlordId, photos, postcode, rent, specialFeatures, step, town, videoTour, videoUrl]);
 
   function toggleOutside(value: string) {
     const selected = details.outsideTypes.includes(value)
@@ -295,9 +311,10 @@ export function PropertyOnboarding() {
         });
       }
     }
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl }));
+    localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify({ step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl }));
     savePropertyDraft({
       id: draftId,
+      ownerId: landlordId,
       title: `${town || "Draft"} ${details.propertyType}`,
       address: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", ") || "Address pending",
       postcode,
@@ -406,13 +423,15 @@ export function PropertyOnboarding() {
             thumbnail_url: photos[0]?.url || null
           });
         }
-        localStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(`${DRAFT_KEY}.${landlordId}`);
+        deletePropertyDraft(draftId);
         navigate(`/properties/${data.id}`);
         return;
       }
     }
     savePublishedProperty(property);
-    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(`${DRAFT_KEY}.${landlordId}`);
+    deletePropertyDraft(draftId);
     navigate(`/properties/${property.id}`);
   }
 
