@@ -52,9 +52,14 @@ function safeKey(fileName: string) {
 // (no per-user identity required), so we authenticate the upload with the anon
 // key — Storage accepts it as the `anon` role and the bucket policy allows the
 // write. Verified end-to-end: an anon-key upload returns HTTP 200.
+// Public anon key (safe to embed — it ships in the client bundle anyway). Used
+// directly for storage so uploads never depend on which key the build env
+// injected; this exact key is verified to return HTTP 200 from the Storage API.
+const STORAGE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhZ2NubXJ1aXFlY29naXpjZGJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTg1NTcsImV4cCI6MjA5NjE3NDU1N30.Iv64Hz59A_6lPEjqKlktYoIXIhFR-kNLImOXl5IMoFE";
+
 async function uploadToBucket(bucket: string, path: string, file: File, contentType: string | undefined, onProgress?: (progress: number) => void): Promise<string> {
   const baseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+  const apikey = STORAGE_ANON_KEY;
   onProgress?.(15);
   const res = await fetch(`${baseUrl}/storage/v1/object/${bucket}/${path}`, {
     method: "POST",
