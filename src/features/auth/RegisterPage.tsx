@@ -309,9 +309,14 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
           <div className="hero-actions register-step-actions">
             {step > 0 && <button className="btn secondary" type="button" onClick={() => { setError(""); setStep(step - 1); }}><ArrowLeft size={18} /> Back</button>}
             {step < steps.length - 1 ? (
-              <button className="btn primary" type="button" onClick={next}>Continue <ArrowRight size={18} /></button>
+              <button key="continue-step" className="btn primary" type="button" onClick={next}>Continue <ArrowRight size={18} /></button>
             ) : (
-              <button className="btn primary" disabled={loading}>{loading ? "Creating account..." : <><Sparkles size={18} /> Create account</>}</button>
+              // Explicit type="button" + distinct key: never let React morph the
+              // Continue button (type="button") into a submit button in place.
+              // That in-place type change submits the form during the click that
+              // advances onto this step, which silently auto-skipped the optional
+              // profile-photo step the instant it appeared.
+              <button key="create-account" className="btn primary" type="button" disabled={loading} onClick={() => completeRegistration()}>{loading ? "Creating account..." : <><Sparkles size={18} /> Create account</>}</button>
             )}
           </div>
           <p className="muted">Already have an account? <Link className="strong-link" to="/login">Log in</Link></p>
