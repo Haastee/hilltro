@@ -35,7 +35,12 @@ jobs:
         env:
           VITE_BASE_PATH: /
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Use the legacy anon JWT key (public, RLS-protected). The newer
+          # sb_publishable_ key works for the database/auth but the Storage
+          # service does not resolve the signed-in user from it, so uploads were
+          # rejected by RLS (auth.uid() null). The anon key is handled correctly
+          # across PostgREST, Auth and Storage.
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhZ2NubXJ1aXFlY29naXpjZGJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTg1NTcsImV4cCI6MjA5NjE3NDU1N30.Iv64Hz59A_6lPEjqKlktYoIXIhFR-kNLImOXl5IMoFE' }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
