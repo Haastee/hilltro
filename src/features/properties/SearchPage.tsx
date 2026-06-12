@@ -9,7 +9,7 @@ import type { Property } from "../../types/domain";
 import { SelectField } from "../../components/SelectField";
 import { MultiSelectField, type MultiSelectOption } from "../../components/MultiSelectField";
 import { PropertyCard } from "./PropertyCard";
-import { filterByPolygon, filterByRadius, locationOrigin, type LatLngPoint } from "../../services/locationService";
+import { distanceMiles, filterByPolygon, filterByRadius, locationOrigin, type LatLngPoint } from "../../services/locationService";
 import { readPendingSavedSearch, saveSearch, setPendingSavedSearch } from "../../services/engagementService";
 
 const PropertyMap = lazy(() => import("../../components/map/PropertyMap"));
@@ -139,16 +139,59 @@ export function SearchPage() {
     const locationFiltered = radius > 0 ? filterByRadius(combined, origin, radius) : combined.filter((property) => matchesLocation(property, filters.location));
     return locationFiltered
       .filter((property) => matchesSearchArea(property, filters.location, radius, origin))
-      .filter((property) => property.rentPcm >= (Number(filters.minPrice) || 0))
       .filter((property) => !filters.maxPrice || filters.maxPrice.endsWith("+") || property.rentPcm <= Number(filters.maxPrice))
-      .filter((property) => filters.bedrooms.length === 0 || filters.bedrooms.some((value) => value === "5" ? property.bedrooms >= 5 : value === "Studio" ? property.bedrooms <= 1 : property.bedrooms === Number(value)))
-      .filter((property) => filters.bathrooms.length === 0 || filters.bathrooms.some((value) => value === "4" ? property.bathrooms >= 4 : property.bathrooms === Number(value)))
-      .filter((property) => filters.propertyType.length === 0 || filters.propertyType.some((type) => property.type === type || (type === "House" && property.type.includes("House"))))
-      .filter((property) => filters.furnishing.length === 0 || filters.furnishing.includes(property.furnishingStatus))
-      .filter((property) => filters.availability === "Any" || availabilityMatches(property.availableFrom, filters.availability));
+      .filter((property) => passesAttributeFilters(property, filters));
   }, [remoteResults, filters]);
 
   const results = useMemo(() => filterByPolygon(baseResults, appliedPolygon), [baseResults, appliedPolygon]);
+
+  // "Stretch" results shown AFTER the exact matches: properties just outside the
+  // searched location (within 500m of a postcode/area/drawn search, up to 1km of
+  // a town/city) and/or up to 15% above the max price. Each is tagged so the
+  // tenant sees exactly why it is included (e.g. "300m from your search",
+  // "10% more expensive").
+  const stretchResults = useMemo(() => {
+    type Stretch = { property: Property; tags: string[]; dist: number };
+    const hasQuery = Boolean(filters.location.trim());
+    const hasPolygon = appliedPolygon.length >= 3;
+    if (!hasQuery && !hasPolygon) return [] as Stretch[];
+    const combined = mergeProperties(remoteResults, primeCentralListings);
+    const explicitR = radiusMiles(filters.radius);
+    const origin = locationOrigin(combined, filters.location);
+    const query = filters.location.trim().toLowerCase();
+    const isTown = Boolean(query) && combined.some((p) => (p.city || "").trim().toLowerCase() === query);
+    const stretchR = isTown ? 0.621371 : 0.310686; // 1km vs 500m, in miles
+    const maxPrice = filters.maxPrice && !filters.maxPrice.endsWith("+") ? Number(filters.maxPrice) : null;
+    const exactIds = new Set(results.map((p) => p.id));
+    const inLocation = (p: Property) =>
+      hasPolygon ? filterByPolygon([p], appliedPolygon).length > 0
+        : explicitR > 0 && origin ? distanceMiles(origin, p) <= explicitR
+          : matchesLocation(p, filters.location);
+    const nearbyDist = (p: Property) => {
+      const point = { latitude: p.latitude, longitude: p.longitude };
+      if (hasPolygon) return Math.min(...appliedPolygon.map((v) => distanceMiles(v, point)));
+      return origin ? distanceMiles(origin, point) : Number.MAX_SAFE_INTEGER;
+    };
+    return combined
+      .filter((p) => !exactIds.has(p.id))
+      .filter((p) => passesAttributeFilters(p, filters))
+      .map<Stretch | null>((p) => {
+        const loc = inLocation(p);
+        const dist = nearbyDist(p);
+        const nearbyOk = dist <= explicitR + stretchR;
+        const priceOk = maxPrice === null || p.rentPcm <= maxPrice * 1.15;
+        const overBudget = maxPrice !== null && p.rentPcm > maxPrice;
+        if ((!loc && !nearbyOk) || !priceOk) return null;
+        const tags: string[] = [];
+        if (!loc && nearbyOk) tags.push(formatDistanceTag(dist));
+        if (overBudget) tags.push(formatPriceTag(p.rentPcm, maxPrice as number));
+        if (!tags.length) return null;
+        return { property: p, tags, dist };
+      })
+      .filter((x): x is Stretch => x !== null)
+      .sort((a, b) => a.dist - b.dist || a.property.rentPcm - b.property.rentPcm)
+      .slice(0, 24);
+  }, [remoteResults, filters, appliedPolygon, results]);
   const radius = radiusMiles(filters.radius);
   const radiusOrigin = useMemo(() => locationOrigin(mergeProperties(remoteResults, primeCentralListings), filters.location), [remoteResults, filters.location]);
   const filtersAreActive = Boolean(
@@ -370,6 +413,27 @@ export function SearchPage() {
           <div className="property-results-list">
             {results.map((property) => <div id={`property-result-${property.id}`} className={selectedProperty === property.id ? "selected-result" : ""} key={property.id} onMouseEnter={() => setSelectedProperty(property.id)}><PropertyCard property={property} /></div>)}
           </div>
+          {results.length === 0 && stretchResults.length === 0 && (
+            <article className="quiet-empty"><h3>No matching properties.</h3><p className="muted">Try widening your price range, removing a filter, or searching a nearby postcode, street or town.</p></article>
+          )}
+          {stretchResults.length > 0 && (
+            <div className="stretch-results-block">
+              <div className="results-heading stretch-heading">
+                <div>
+                  <p className="eyebrow">Just outside your search</p>
+                  <h3>{stretchResults.length} nearby or slightly above budget</h3>
+                </div>
+              </div>
+              <div className="property-results-list">
+                {stretchResults.map(({ property, tags }) => (
+                  <div id={`property-result-${property.id}`} className={`stretch-result ${selectedProperty === property.id ? "selected-result" : ""}`} key={property.id} onMouseEnter={() => setSelectedProperty(property.id)}>
+                    <div className="stretch-tags">{tags.map((tag) => <span className="badge orange stretch-tag" key={tag}>{tag}</span>)}</div>
+                    <PropertyCard property={property} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </section>
     </main>
@@ -399,6 +463,38 @@ function radiusMiles(value: string) {
   if (value.includes("3")) return 3;
   if (value.includes("1")) return 1;
   return 0;
+}
+
+type SearchFilterShape = {
+  minPrice: string;
+  bedrooms: string[];
+  bathrooms: string[];
+  propertyType: string[];
+  furnishing: string[];
+  availability: string;
+};
+
+// Everything except location and the max-price ceiling (those are handled per
+// tier — exact vs stretch). Shared by both the exact and stretch result sets.
+function passesAttributeFilters(property: Property, filters: SearchFilterShape) {
+  if (property.rentPcm < (Number(filters.minPrice) || 0)) return false;
+  if (filters.bedrooms.length && !filters.bedrooms.some((value) => value === "5" ? property.bedrooms >= 5 : value === "Studio" ? property.bedrooms <= 1 : property.bedrooms === Number(value))) return false;
+  if (filters.bathrooms.length && !filters.bathrooms.some((value) => value === "4" ? property.bathrooms >= 4 : property.bathrooms === Number(value))) return false;
+  if (filters.propertyType.length && !filters.propertyType.some((type) => property.type === type || (type === "House" && property.type.includes("House")))) return false;
+  if (filters.furnishing.length && !filters.furnishing.includes(property.furnishingStatus)) return false;
+  if (filters.availability !== "Any" && !availabilityMatches(property.availableFrom, filters.availability)) return false;
+  return true;
+}
+
+function formatDistanceTag(distMiles: number) {
+  const meters = Math.round(distMiles * 1609.34);
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)}km from your search`;
+  return `${Math.max(10, Math.round(meters / 10) * 10)}m from your search`;
+}
+
+function formatPriceTag(rent: number, maxPrice: number) {
+  const pct = Math.round((rent / maxPrice - 1) * 100);
+  return pct <= 0 ? "Just over budget" : `${pct}% more expensive`;
 }
 
 function buildPriceOptions() {
