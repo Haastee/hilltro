@@ -622,6 +622,21 @@ body {
 .search-hero h1 { margin: 0; max-width: 920px; font-size: clamp(48px, 6vw, 64px); line-height: 1; letter-spacing: -.03em; }
 .search-hero p:not(.eyebrow) { max-width: 760px; margin: 0; color: var(--color-muted); font-size: 18px; line-height: 1.65; }
 .premium-search { position: relative; z-index: 50; max-width: 1320px; margin: 0 auto 16px; display: grid; gap: 16px; border: 1px solid rgba(214,224,227,.9); border-radius: 24px; padding: 18px; background: rgba(255,255,255,.96); box-shadow: 0 20px 54px rgba(16,24,32,.08); backdrop-filter: blur(18px); }
+
+/* Home page primary search — the first step into the product. Lifts onto the
+   hero's lower edge so it reads as the main call to action. */
+.home-search-band { position: relative; z-index: 6; max-width: 1080px; margin: clamp(-72px, -5vw, -40px) auto 10px; padding: 0 clamp(16px, 4vw, 40px); }
+.home-search-card { display: grid; gap: 14px; border: 1px solid var(--color-line); border-radius: 24px; padding: clamp(18px, 2.4vw, 26px); background: rgba(255,255,255,.97); box-shadow: 0 26px 64px rgba(16,24,32,.16); backdrop-filter: blur(16px); animation: rise-in .26s ease both; }
+.home-search-eyebrow { margin: 0; color: var(--color-orange-ink); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.home-search-row { display: flex; gap: 12px; align-items: stretch; }
+.home-search-row .search-input-wrap { flex: 1 1 auto; min-width: 0; }
+.home-draw-btn { width: fit-content; }
+@media (max-width: 760px) {
+  .home-search-band { margin-top: 14px; max-width: 100%; }
+  .home-search-row { flex-direction: column; }
+  .home-search-row .search-submit { width: 100%; min-width: 0; }
+  .home-draw-btn { width: 100%; justify-content: center; }
+}
 .filter-location-row { display: grid; grid-template-columns: minmax(360px, 1fr) auto; gap: 14px; align-items: end; padding-bottom: 16px; border-bottom: 1px solid rgba(228,232,234,.82); }
 .filter-controls-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 14px; align-items: end; }
 .filter-group-label { grid-column: 1 / -1; color: var(--text-tertiary); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }

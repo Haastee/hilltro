@@ -74,8 +74,10 @@ export function SearchPage() {
   const [saveNotice, setSaveNotice] = useState("");
   const [remoteResults, setRemoteResults] = useState<Property[]>([]);
   const [focused, setFocused] = useState(false);
-  const [drawMode, setDrawMode] = useState(false);
-  const [mapViewOpen, setMapViewOpen] = useState(false);
+  // Arriving from the home "Draw your search area" button opens the map overlay
+  // straight into drawing mode.
+  const [drawMode, setDrawMode] = useState(params.get("draw") === "1");
+  const [mapViewOpen, setMapViewOpen] = useState(params.get("draw") === "1");
   const [draftPolygon, setDraftPolygon] = useState<LatLngPoint[]>([]);
   const [appliedPolygon, setAppliedPolygon] = useState<LatLngPoint[]>([]);
   const [visibleMapPolygon, setVisibleMapPolygon] = useState<LatLngPoint[]>([]);

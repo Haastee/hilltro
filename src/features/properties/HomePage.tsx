@@ -7,6 +7,7 @@ import { PropertyCard } from "./PropertyCard";
 import { primeCentralListings } from "../../data/properties";
 import { assetUrl } from "../../utils/asset";
 import { HomeHeroRotator } from "./HomeHeroRotator";
+import { HomeSearchBar } from "./HomeSearchBar";
 import { TenantHero } from "./TenantHero";
 import { LandlordHero } from "./LandlordHero";
 
@@ -21,6 +22,8 @@ export function HomePage() {
   return (
     <main>
       <HomeHeroRotator slides={[<TenantHero key="tenant" />, <LandlordHero key="landlord" />]} labels={["For tenants", "For landlords"]} />
+
+      <HomeSearchBar />
 
       <section className="section-shell">
         <div className="featured-row">
