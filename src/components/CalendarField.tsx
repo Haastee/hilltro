@@ -53,7 +53,7 @@ export function CalendarField({ label, value, onChange, min, required }: { label
     <div className="calendar-field">
       <span>{label}{required ? "" : " (optional)"}</span>
       <button type="button" className="calendar-trigger" onClick={() => setOpen(!open)} aria-expanded={open}>
-        {selected ? valueFormatter.format(selected) : "Choose date"}
+        {selected ? valueFormatter.format(selected) : "Select a date"}
       </button>
       {open && (
         <div className="calendar-popover">
@@ -99,11 +99,18 @@ export function ViewingDateTimePicker({ date, time, onDateChange, onTimeChange }
   );
 }
 
-export function defaultViewingTime() {
+// Slot the time scroller opens *near* (it does NOT auto-select). For today,
+// that's the current UK time + 2 hours, rounded to the 15-min grid; for any
+// future date it's the start of the viewing day (10:00). Returns "" when today
+// is already too late (after which the user should pick tomorrow → 10:00).
+function suggestedViewingTime(date: string) {
+  const isToday = !date || date === todayISO();
+  if (!isToday) return "10:00";
   const ukParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "numeric", hour12: false }).formatToParts(new Date());
-  const hour = Number(ukParts.find((part) => part.type === "hour")?.value || "9");
+  const hour = Number(ukParts.find((part) => part.type === "hour")?.value || "0");
   const minute = Number(ukParts.find((part) => part.type === "minute")?.value || "0");
-  const total = Math.ceil((hour * 60 + minute + 60) / 15) * 15;
+  const total = Math.ceil((hour * 60 + minute + 120) / 15) * 15;
+  if (total > 20 * 60) return "";
   return clampToViewingHours(total);
 }
 
@@ -118,20 +125,20 @@ function TimeWheelField({ label, value, date, onChange }: { label: string; value
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const active = value || defaultViewingTime();
   const slots = useMemo(() => viewingTimeSlots(date), [date]);
-  const displayed = slots.includes(active) ? active : slots[0] || "";
-  const previousDate = useRef(date);
+  // The slot the scroller opens NEAR (never auto-selected). Falls to the first
+  // available slot if the +2h suggestion is past the end of the day.
+  const suggestion = useMemo(() => {
+    const wanted = suggestedViewingTime(date);
+    if (wanted && slots.includes(wanted)) return wanted;
+    return slots.find((slot) => slot >= wanted) || slots[0] || "";
+  }, [date, slots]);
 
+  // If a previously chosen time is no longer valid (e.g. the date changed to
+  // today and that slot is now in the past), clear it — but never auto-fill.
   useEffect(() => {
-    if (!slots.length) return;
-    if (date && previousDate.current !== date) {
-      previousDate.current = date;
-      onChange(slots[0]);
-      return;
-    }
-    if (!value || !slots.includes(value)) onChange(slots[0]);
-  }, [date, onChange, slots, value]);
+    if (value && slots.length && !slots.includes(value)) onChange("");
+  }, [slots, value, onChange]);
 
   useEffect(() => {
     function close(event: PointerEvent) {
@@ -145,13 +152,14 @@ function TimeWheelField({ label, value, date, onChange }: { label: string; value
     if (!open) return;
     window.setTimeout(() => {
       const popover = popoverRef.current;
-      const selected = popover?.querySelector(`[data-time="${displayed}"]`) as HTMLButtonElement | null;
+      const target = value && slots.includes(value) ? value : suggestion;
+      const selected = popover?.querySelector(`[data-time="${target}"]`) as HTMLButtonElement | null;
       if (popover && selected) popover.scrollTop = Math.max(0, selected.offsetTop - popover.clientHeight / 2 + selected.offsetHeight / 2);
     }, 0);
-  }, [displayed, open]);
+  }, [open, suggestion, slots, value]);
 
   function move(offset: number) {
-    const index = Math.max(0, slots.indexOf(displayed));
+    const index = value && slots.includes(value) ? slots.indexOf(value) : Math.max(0, slots.indexOf(suggestion));
     const next = slots[Math.min(slots.length - 1, Math.max(0, index + offset))];
     if (next) onChange(next);
   }
@@ -171,17 +179,17 @@ function TimeWheelField({ label, value, date, onChange }: { label: string; value
           if (event.key === "Escape") setOpen(false);
         }}
       >
-        {displayed ? formatTimeLabel(displayed) : "Choose another date"}
+        {value ? formatTimeLabel(value) : "Select a time"}
       </button>
       {open && (
         <div className="time-wheel-popover" role="listbox" ref={popoverRef}>
-          {slots.length === 0 && <p className="select-empty">No valid viewing slots remain today. Choose another date.</p>}
+          {slots.length === 0 && <p className="select-empty">No viewing slots remain today — please choose another date.</p>}
           {slots.map((slot) => (
             <button
               type="button"
               role="option"
-              aria-selected={slot === displayed}
-              className={slot === displayed ? "active" : ""}
+              aria-selected={slot === value}
+              className={slot === value ? "active" : ""}
               data-time={slot}
               key={slot}
               onClick={() => {

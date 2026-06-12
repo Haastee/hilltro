@@ -20,7 +20,10 @@ const floorLevelNumber = (floor: string) => floor === "Basement" ? -1 : floor ==
 const outsideOptions = ["Garden", "Terrace", "Patio", "Balcony", "Roof Terrace"];
 const parkingOptions = ["No Parking", "On Street", "Resident Permit Available", "Off Street Parking", "Off-Street Parking (Separate Charge)", "Garage", "Underground Parking", "Allocated Space"];
 const furnishingOptions = ["Furnished", "Part Furnished", "Unfurnished", "Flexible", "Open To Discussion"];
-const specialFeatureOptions = ["Concierge", "Lift", "Great Views", "Gym", "Residents Lounge", "Roof Terrace", "Communal Garden", "Parking", "Balcony", "Air Conditioning", "EV Charging", "Swimming Pool"];
+// Balcony, Roof Terrace and Parking are intentionally NOT here — they live in
+// Outside Space (Balcony/Roof Terrace) and the dedicated Parking field, so they
+// must never be duplicated as Special Features.
+const specialFeatureOptions = ["Concierge", "Lift", "Great Views", "Gym", "Residents Lounge", "Communal Garden", "Air Conditioning", "EV Charging", "Swimming Pool"];
 
 type UploadedPhoto = { id: string; name: string; url: string; progress: number; error?: boolean; errorMessage?: string };
 const DRAFT_KEY = "hilltro.property.draft";
@@ -51,15 +54,17 @@ export function PropertyOnboarding() {
   const [addressLine1, setAddressLine1] = useState("");
   const [addressLine2, setAddressLine2] = useState("");
   const [town, setTown] = useState("");
+  // Nothing is pre-filled — every required attribute must be deliberately
+  // chosen by the landlord.
   const [details, setDetails] = useState({
-    bedrooms: "2",
-    bathrooms: "1",
-    receptions: "1",
-    outsideSpace: "No",
+    bedrooms: "",
+    bathrooms: "",
+    receptions: "",
+    outsideSpace: "",
     outsideTypes: [] as string[],
-    parking: "No Parking",
-    furnishing: "Furnished",
-    propertyType: "Flat",
+    parking: "",
+    furnishing: "",
+    propertyType: "",
     floor: "",
     hasLift: "",
     description: ""
@@ -77,6 +82,13 @@ export function PropertyOnboarding() {
   const [missing, setMissing] = useState<Set<string>>(new Set(params.get("missing") ? ["photos"] : []));
   const [publishError, setPublishError] = useState("");
   const [publishing, setPublishing] = useState(false);
+  // When the landlord opens "Add Property" and an unfinished draft exists, we
+  // ask what to do (Continue / Create New / Cancel) instead of silently dropping
+  // them into the old draft. `ready` gates the autosave so we never overwrite
+  // the existing draft before they decide.
+  const [draftPrompt, setDraftPrompt] = useState<{ address: string } | null>(null);
+  const [resumeChoice, setResumeChoice] = useState<"auto" | "continue" | "new">(params.get("propertyId") || params.get("resume") ? "continue" : "auto");
+  const [ready, setReady] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progress = ((step + 1) / steps.length) * 100;
@@ -100,26 +112,41 @@ export function PropertyOnboarding() {
     // Wait until we know who is signed in, then restore only THIS account's
     // in-progress draft (never another user's autosave on the same browser).
     if (!landlordId) return;
+    if (resumeChoice === "new") {
+      setReady(true);
+      return;
+    }
     const draft = JSON.parse(localStorage.getItem(`${DRAFT_KEY}.${landlordId}`) || "null");
-    if (!draft) return;
-    if (draft.step !== undefined && !params.get("resume")) setStep(draft.step);
-    setPostcode(draft.postcode || "");
-    setAddressLine1(draft.addressLine1 || "");
-    setAddressLine2(draft.addressLine2 || "");
-    setTown(draft.town || "");
-    if (draft.details) setDetails(draft.details);
-    if (draft.specialFeatures) setSpecialFeatures(draft.specialFeatures);
-    setRent(draft.rent || "");
-    setAvailableFrom(draft.availableFrom || "");
-    if (draft.photos) setPhotos(draft.photos);
-    if (draft.floorplan) setFloorplan(draft.floorplan);
-    if (draft.videoTour) setVideoTour(draft.videoTour);
-    if (draft.videoUrl) setVideoUrl(draft.videoUrl);
-  }, [params, landlordId]);
+    const hasContent = Boolean(draft && (draft.addressLine1 || draft.postcode || draft.details?.propertyType || draft.rent));
+    const explicit = Boolean(params.get("propertyId") || params.get("resume"));
+    // Came in via "Add Property" with an unfinished draft → ask, don't auto-load.
+    if (resumeChoice === "auto" && hasContent && !explicit) {
+      setDraftPrompt({ address: [draft.addressLine1, draft.town, draft.postcode].filter(Boolean).join(", ") || "Unfinished listing" });
+      return;
+    }
+    if (draft) {
+      if (draft.step !== undefined && !params.get("resume")) setStep(draft.step);
+      setPostcode(draft.postcode || "");
+      setAddressLine1(draft.addressLine1 || "");
+      setAddressLine2(draft.addressLine2 || "");
+      setTown(draft.town || "");
+      // Merge over the full default shape so a partial/legacy draft can never
+      // leave required keys (e.g. outsideTypes) undefined and crash the render.
+      if (draft.details) setDetails((prev) => ({ ...prev, ...draft.details, outsideTypes: draft.details.outsideTypes ?? prev.outsideTypes }));
+      if (draft.specialFeatures) setSpecialFeatures(draft.specialFeatures);
+      setRent(draft.rent || "");
+      setAvailableFrom(draft.availableFrom || "");
+      if (draft.photos) setPhotos(draft.photos);
+      if (draft.floorplan) setFloorplan(draft.floorplan);
+      if (draft.videoTour) setVideoTour(draft.videoTour);
+      if (draft.videoUrl) setVideoUrl(draft.videoUrl);
+    }
+    setReady(true);
+  }, [params, landlordId, resumeChoice]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
-      if (!landlordId) return;
+      if (!landlordId || !ready) return;
       const payload = { step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, photos, floorplan, videoTour, videoUrl };
       localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify(payload));
       savePropertyDraft({
@@ -137,7 +164,7 @@ export function PropertyOnboarding() {
       });
     }, 500);
     return () => window.clearTimeout(id);
-  }, [addressLine1, addressLine2, details, draftId, floorplan, landlordId, photos, postcode, rent, specialFeatures, step, town, videoTour, videoUrl]);
+  }, [addressLine1, addressLine2, details, draftId, floorplan, landlordId, photos, postcode, ready, rent, specialFeatures, step, town, videoTour, videoUrl]);
 
   function toggleOutside(value: string) {
     const selected = details.outsideTypes.includes(value)
@@ -256,9 +283,21 @@ export function PropertyOnboarding() {
       if (!addressLine1.trim()) missingFields.add("address");
       if (!town.trim()) missingFields.add("town");
     }
-    if (targetStep === 1 && needsFloor && !details.floor) missingFields.add("floor");
-    if (targetStep === 2 && (!details.bathrooms || Number(details.bathrooms) < 1)) missingFields.add("bathrooms");
-    if (targetStep === 3 && details.outsideSpace === "Yes" && details.outsideTypes.length === 0) missingFields.add("outsideTypes");
+    if (targetStep === 1) {
+      if (!details.propertyType) missingFields.add("propertyType");
+      if (details.propertyType && needsFloor && !details.floor) missingFields.add("floor");
+    }
+    if (targetStep === 2) {
+      if (!details.bedrooms) missingFields.add("bedrooms");
+      if (!details.bathrooms || Number(details.bathrooms) < 1) missingFields.add("bathrooms");
+      if (details.receptions === "" || Number(details.receptions) < 0) missingFields.add("receptions");
+    }
+    if (targetStep === 3) {
+      if (!details.furnishing) missingFields.add("furnishing");
+      if (!details.parking) missingFields.add("parking");
+      if (!details.outsideSpace) missingFields.add("outsideSpace");
+      if (details.outsideSpace === "Yes" && details.outsideTypes.length === 0) missingFields.add("outsideTypes");
+    }
     if (targetStep === 4 && !details.description.trim()) missingFields.add("description");
     if (targetStep === 6 && !availableFrom) missingFields.add("availableFrom");
     if (targetStep === 7 && !rent) missingFields.add("rent");
@@ -336,6 +375,18 @@ export function PropertyOnboarding() {
     // Client-side navigation keeps the auth session intact (a full reload could
     // momentarily lose it and bounce to /login).
     navigate("/landlord/properties");
+  }
+
+  function continueDraft() {
+    setDraftPrompt(null);
+    setResumeChoice("continue");
+  }
+
+  function createNewProperty() {
+    if (landlordId) localStorage.removeItem(`${DRAFT_KEY}.${landlordId}`);
+    deletePropertyDraft(draftId);
+    setDraftPrompt(null);
+    setResumeChoice("new");
   }
 
   async function publishListing() {
@@ -453,6 +504,20 @@ export function PropertyOnboarding() {
 
   return (
     <main className="page">
+      {draftPrompt && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="card modal-card form-grid">
+            <h2>You already have an unfinished listing</h2>
+            <p className="muted">Draft: <b>{draftPrompt.address}</b></p>
+            <p className="muted">Continue where you left off, or start a brand-new property.</p>
+            <div className="hero-actions">
+              <button className="btn primary" type="button" onClick={continueDraft}>Continue Draft</button>
+              <button className="btn" type="button" onClick={createNewProperty}>Create New Property</button>
+              <button className="btn ghost" type="button" onClick={() => navigate("/landlord/properties")}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="hero compact-hero">
         <p className="badge orange">Create listing</p>
         <h1>List a property through a guided premium flow.</h1>
@@ -504,12 +569,15 @@ export function PropertyOnboarding() {
             <div className="form-grid">
               <h2>Property type</h2>
               <p className="form-note">* Required field</p>
-              <SelectField label="Property Type *" value={details.propertyType} onChange={(value) => {
-                const isHouse = houseTypes.includes(value);
-                setDetails({ ...details, propertyType: value, floor: isHouse ? "" : details.floor, hasLift: isHouse ? "" : details.hasLift });
-                if (!isHouse) setSpecialFeatures((current) => current.filter((feature) => feature !== "Lift"));
-              }} options={propertyTypes.map((item) => ({ value: item, label: item }))} />
-              {needsFloor && (
+              <div className={missing.has("propertyType") ? "required-missing" : ""}>
+                <SelectField label="Property Type *" value={details.propertyType} onChange={(value) => {
+                  const isHouse = houseTypes.includes(value);
+                  setDetails({ ...details, propertyType: value, floor: isHouse ? "" : details.floor, hasLift: isHouse ? "" : details.hasLift });
+                  if (!isHouse) setSpecialFeatures((current) => current.filter((feature) => feature !== "Lift"));
+                }} options={[{ value: "", label: "Select property type" }, ...propertyTypes.map((item) => ({ value: item, label: item }))]} />
+                {missing.has("propertyType") && <small>Select the property type.</small>}
+              </div>
+              {details.propertyType && needsFloor && (
                 <div className={missing.has("floor") ? "required-missing" : ""}>
                   <SelectField label="Which floor is it on? *" value={details.floor} onChange={(value) => setDetails({ ...details, floor: value, hasLift: floorLevelNumber(value) >= 2 ? details.hasLift : "" })} options={[{ value: "", label: "Select a floor" }, ...floorOptions.map((item) => ({ value: item, label: item }))]} />
                   {missing.has("floor") && <small>Select which floor the property is on.</small>}
@@ -526,9 +594,12 @@ export function PropertyOnboarding() {
               <h2>Rooms</h2>
               <p className="form-note">* Required field</p>
               <div className="form-grid two">
-                <SelectField label="Bedrooms *" value={details.bedrooms} onChange={(value) => setDetails({ ...details, bedrooms: value })} options={["Studio", "1", "2", "3", "4", "5", "5+"].map((item) => ({ value: item, label: item }))} />
-                <label className={missing.has("bathrooms") ? "required-missing" : ""}>Bathrooms *<input type="number" min="1" value={details.bathrooms} onChange={(event) => setDetails({ ...details, bathrooms: event.target.value })} />{missing.has("bathrooms") && <small>Bathroom count is required for valuation and listing quality.</small>}</label>
-                <label>Reception Rooms *<input type="number" min="0" value={details.receptions} onChange={(event) => setDetails({ ...details, receptions: event.target.value })} /></label>
+                <div className={missing.has("bedrooms") ? "required-missing" : ""}>
+                  <SelectField label="Bedrooms *" value={details.bedrooms} onChange={(value) => setDetails({ ...details, bedrooms: value })} options={[{ value: "", label: "Select bedrooms" }, ...["Studio", "1", "2", "3", "4", "5", "5+"].map((item) => ({ value: item, label: item }))]} />
+                  {missing.has("bedrooms") && <small>Select the number of bedrooms.</small>}
+                </div>
+                <label className={missing.has("bathrooms") ? "required-missing" : ""}>Bathrooms *<input type="number" min="1" placeholder="e.g. 1" value={details.bathrooms} onChange={(event) => setDetails({ ...details, bathrooms: event.target.value })} />{missing.has("bathrooms") && <small>Bathroom count is required for valuation and listing quality.</small>}</label>
+                <label className={missing.has("receptions") ? "required-missing" : ""}>Reception Rooms *<input type="number" min="0" placeholder="e.g. 1" value={details.receptions} onChange={(event) => setDetails({ ...details, receptions: event.target.value })} />{missing.has("receptions") && <small>Enter the number of reception rooms (0 if none).</small>}</label>
               </div>
             </div>
           )}
@@ -538,10 +609,19 @@ export function PropertyOnboarding() {
               <h2>Features</h2>
               <p className="form-note">* Required field</p>
               <div className="form-grid two">
-                <SelectField label="Furnishing *" value={details.furnishing} onChange={(value) => setDetails({ ...details, furnishing: value })} options={furnishingOptions.map((item) => ({ value: item, label: item }))} />
-                <SelectField label="Parking *" value={details.parking} onChange={(value) => setDetails({ ...details, parking: value })} options={parkingOptions.map((item) => ({ value: item, label: item }))} />
+                <div className={missing.has("furnishing") ? "required-missing" : ""}>
+                  <SelectField label="Furnishing *" value={details.furnishing} onChange={(value) => setDetails({ ...details, furnishing: value })} options={[{ value: "", label: "Select furnishing" }, ...furnishingOptions.map((item) => ({ value: item, label: item }))]} />
+                  {missing.has("furnishing") && <small>Select the furnishing status.</small>}
+                </div>
+                <div className={missing.has("parking") ? "required-missing" : ""}>
+                  <SelectField label="Parking *" value={details.parking} onChange={(value) => setDetails({ ...details, parking: value })} options={[{ value: "", label: "Select parking" }, ...parkingOptions.map((item) => ({ value: item, label: item }))]} />
+                  {missing.has("parking") && <small>Select the parking option.</small>}
+                </div>
               </div>
-              <SelectField label="Outside Space *" value={details.outsideSpace} onChange={(value) => setDetails({ ...details, outsideSpace: value, outsideTypes: value === "Yes" ? details.outsideTypes : [] })} options={[{ value: "No", label: "No" }, { value: "Yes", label: "Yes" }]} />
+              <div className={missing.has("outsideSpace") ? "required-missing" : ""}>
+                <SelectField label="Outside Space *" value={details.outsideSpace} onChange={(value) => setDetails({ ...details, outsideSpace: value, outsideTypes: value === "Yes" ? details.outsideTypes : [] })} options={[{ value: "", label: "Select an option" }, { value: "No", label: "No" }, { value: "Yes", label: "Yes" }]} />
+                {missing.has("outsideSpace") && <small>Let applicants know if there is outside space.</small>}
+              </div>
               {details.outsideSpace === "Yes" && <div className={missing.has("outsideTypes") ? "required-missing" : ""}><div className="choice-grid">{outsideOptions.map((item) => <button type="button" className={`choice ${details.outsideTypes.includes(item) ? "selected" : ""}`} key={item} onClick={() => toggleOutside(item)}>{item}</button>)}</div>{missing.has("outsideTypes") && <small>Select at least one outside space type so applicants understand the usable amenity.</small>}</div>}
             </div>
           )}

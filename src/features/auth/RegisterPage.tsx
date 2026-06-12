@@ -6,6 +6,7 @@ import { CountryDialCodePicker, dialCodeFromPickerValue } from "../../components
 import { FloatingInput } from "../../components/FloatingField";
 import { ProfilePhotoUpload } from "../../components/ProfilePhotoUpload";
 import { defaultCountryDialOption } from "../../data/countries";
+import { emailError, nameError, phoneError, sanitizeName, sanitizePhone } from "../../utils/validation";
 import type { User } from "../../types/domain";
 
 type RegistrationState = {
@@ -117,12 +118,13 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
       body: (
         <div className="form-grid">
           <p className="form-note">* Required field</p>
-          <FloatingInput label="First Name *" autoComplete="given-name" value={values.firstName} onChange={(event) => setValues({ ...values, firstName: event.target.value })} required />
+          <FloatingInput label="First Name *" autoComplete="given-name" value={values.firstName} onChange={(event) => setValues({ ...values, firstName: sanitizeName(event.target.value) })} required />
           <p className="field-subhint">As it appears on your passport.</p>
+          {values.firstName.trim() && nameError(values.firstName, "first name") && <p className="notice error">{nameError(values.firstName, "first name")}</p>}
         </div>
       ),
-      valid: Boolean(values.firstName.trim()),
-      error: "Enter your first name before continuing."
+      valid: !nameError(values.firstName, "first name"),
+      error: nameError(values.firstName, "first name") || "Enter your first name before continuing."
     },
     {
       eyebrow: "Middle name",
@@ -130,7 +132,7 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
       copy: "This is optional. You can skip it.",
       body: (
         <div className="form-grid">
-          <FloatingInput label="Middle Name (optional)" autoComplete="additional-name" value={values.middleName} onChange={(event) => setValues({ ...values, middleName: event.target.value })} />
+          <FloatingInput label="Middle Name (optional)" autoComplete="additional-name" value={values.middleName} onChange={(event) => setValues({ ...values, middleName: sanitizeName(event.target.value) })} />
         </div>
       ),
       valid: true
@@ -142,12 +144,13 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
       body: (
         <div className="form-grid">
           <p className="form-note">* Required field</p>
-          <FloatingInput label="Last Name *" autoComplete="family-name" value={values.lastName} onChange={(event) => setValues({ ...values, lastName: event.target.value })} required />
+          <FloatingInput label="Last Name *" autoComplete="family-name" value={values.lastName} onChange={(event) => setValues({ ...values, lastName: sanitizeName(event.target.value) })} required />
           <p className="field-subhint">As it appears on your passport.</p>
+          {values.lastName.trim() && nameError(values.lastName, "last name") && <p className="notice error">{nameError(values.lastName, "last name")}</p>}
         </div>
       ),
-      valid: Boolean(values.lastName.trim()),
-      error: "Enter your last name before continuing."
+      valid: !nameError(values.lastName, "last name"),
+      error: nameError(values.lastName, "last name") || "Enter your last name before continuing."
     },
     {
       eyebrow: "Email",
@@ -157,10 +160,11 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
         <div className="form-grid">
           <p className="form-note">* Required field</p>
           <FloatingInput label="Email *" type="email" autoComplete="email" value={values.email} onChange={(event) => setValues({ ...values, email: event.target.value })} required />
+          {values.email.trim() && emailError(values.email) && <p className="notice error">{emailError(values.email)}</p>}
         </div>
       ),
-      valid: Boolean(values.email.includes("@")),
-      error: "Enter a valid email address before continuing."
+      valid: !emailError(values.email),
+      error: emailError(values.email) || "Enter a valid email address before continuing."
     },
     {
       eyebrow: "Phone number",
@@ -171,12 +175,13 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
           <p className="form-note">* Required field</p>
           <div className="form-grid two phone-grid">
             <CountryDialCodePicker value={values.country} onChange={(country) => setValues({ ...values, country })} />
-            <FloatingInput label="Phone Number *" type="tel" autoComplete="tel" value={values.phone} onChange={(event) => setValues({ ...values, phone: event.target.value })} required />
+            <FloatingInput label="Phone Number *" type="tel" autoComplete="tel" value={values.phone} onChange={(event) => setValues({ ...values, phone: sanitizePhone(event.target.value) })} required />
           </div>
+          {values.phone.trim() && phoneError(values.phone) && <p className="notice error">{phoneError(values.phone)}</p>}
         </div>
       ),
-      valid: Boolean(values.phone.trim()),
-      error: "Enter your phone number before continuing."
+      valid: !phoneError(values.phone),
+      error: phoneError(values.phone) || "Enter your phone number before continuing."
     },
     {
       eyebrow: "Password",

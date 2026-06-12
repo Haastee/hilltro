@@ -5,6 +5,7 @@ import type { User } from "../../types/domain";
 import { HilltroAvatar } from "../../components/HilltroAvatar";
 import { storageService } from "../../services/storageService";
 import { supabase, hasSupabaseConfig } from "../../utils/supabase";
+import { nameError, phoneError, sanitizeName, sanitizePhone } from "../../utils/validation";
 
 const PROFILE_KEY = "hilltro.profile.local";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -29,11 +30,59 @@ export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const [challenge, setChallenge] = useState("");
+  const [currentEmail, setCurrentEmail] = useState(profile.email || "");
+  const [emailVerified, setEmailVerified] = useState(true);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
+  const canManageEmail = hasSupabaseConfig;
 
   useEffect(() => {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
     onUserChange(profile);
   }, [onUserChange, profile]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig) return;
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive || !data.user) return;
+      setCurrentEmail(data.user.email || profile.email || "");
+      setEmailVerified(Boolean(data.user.email_confirmed_at || data.user.confirmed_at));
+      setPendingEmail((data.user.new_email as string) || "");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profile.email]);
+
+  async function changeEmail() {
+    setEmailError("");
+    setEmailStatus("");
+    const value = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setEmailError("Enter a valid email address.");
+      return;
+    }
+    if (value === currentEmail.toLowerCase()) {
+      setEmailError("That is already your current email.");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: value });
+      if (error) throw new Error(error.message);
+      setPendingEmail(value);
+      setNewEmail("");
+      setEmailStatus(`Verification email sent to ${value}. Your email changes only after you confirm it from that inbox.`);
+    } catch (error) {
+      setEmailError(error instanceof Error ? error.message : "Could not start the email change. Please try again.");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
 
   async function persistProfileImageUrl(url: string | null) {
     // Persist to Supabase for a real signed-in user; demo/local sessions keep
@@ -120,13 +169,27 @@ export function ProfilePage({ user, onUserChange }: { user: User; onUserChange: 
           </div>
           <p className="form-note">* Required field</p>
           <div className="form-grid two">
-            <label>First name *<input value={profile.firstName} onChange={(event) => setProfile({ ...profile, firstName: event.target.value })} /></label>
-            <label>Middle name (optional)<input value={profile.middleName || ""} onChange={(event) => setProfile({ ...profile, middleName: event.target.value })} /></label>
-            <label>Last name *<input value={profile.lastName} onChange={(event) => setProfile({ ...profile, lastName: event.target.value })} /></label>
-            <label>Phone number (optional)<input value={profile.phone || ""} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+            <label className={profile.firstName.trim() && nameError(profile.firstName, "first name") ? "required-missing" : ""}>First name *<input value={profile.firstName} onChange={(event) => setProfile({ ...profile, firstName: sanitizeName(event.target.value) })} />{profile.firstName.trim() && nameError(profile.firstName, "first name") && <small>{nameError(profile.firstName, "first name")}</small>}</label>
+            <label>Middle name (optional)<input value={profile.middleName || ""} onChange={(event) => setProfile({ ...profile, middleName: sanitizeName(event.target.value) })} /></label>
+            <label className={profile.lastName.trim() && nameError(profile.lastName, "last name") ? "required-missing" : ""}>Last name *<input value={profile.lastName} onChange={(event) => setProfile({ ...profile, lastName: sanitizeName(event.target.value) })} />{profile.lastName.trim() && nameError(profile.lastName, "last name") && <small>{nameError(profile.lastName, "last name")}</small>}</label>
           </div>
+          <p className="field-subhint">As it appears on your passport.</p>
+          <label className={(profile.phone || "").trim() && phoneError(profile.phone || "") ? "required-missing" : ""}>Phone number (optional)<input value={profile.phone || ""} onChange={(event) => setProfile({ ...profile, phone: sanitizePhone(event.target.value) })} />{(profile.phone || "").trim() && phoneError(profile.phone || "") && <small>{phoneError(profile.phone || "")}</small>}</label>
           <label>Tell us about yourself (optional)<textarea maxLength={280} value={profile.about || ""} onChange={(event) => setProfile({ ...profile, about: event.target.value })} placeholder="Born and raised Londoner, mum of 2 and a cat lover." /></label>
           <p className="form-note">{(profile.about || "").length}/280 characters</p>
+          {canManageEmail && (
+            <div className="email-manage">
+              <h3>Email address</h3>
+              <p className="email-current">{currentEmail || "—"} {emailVerified ? <span className="email-badge verified">✓ Verified</span> : <span className="email-badge unverified">⚠ Not verified</span>}</p>
+              {pendingEmail && <p className="form-note">Pending change to <b>{pendingEmail}</b> — confirm it from that inbox to finish the change.</p>}
+              <div className="email-change-row">
+                <input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="New email address" aria-label="New email address" />
+                <button className="btn primary" type="button" disabled={emailBusy || !newEmail.trim()} onClick={changeEmail}>{emailBusy ? "Sending…" : "Change email"}</button>
+              </div>
+              {emailError && <p className="notice error">{emailError}</p>}
+              {!emailError && emailStatus && <p className="notice success">{emailStatus}</p>}
+            </div>
+          )}
         </article>
         <aside className="danger-zone subtle-danger-zone">
           <Trash2 />

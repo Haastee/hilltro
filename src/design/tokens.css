@@ -148,7 +148,10 @@ textarea { min-height: 120px; padding: 14px; resize: vertical; }
 .property-detail { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.4fr) 420px; gap: 18px; align-items: start; }
 .property-media { overflow: hidden; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); }
 .property-media img { width: 100%; min-height: 620px; object-fit: cover; }
-.enquiry-card { position: sticky; top: 98px; display: grid; gap: 16px; }
+/* Not sticky — the right column (viewing request, message, offer) scrolls
+   together with the left column so users can reach every form and the content
+   below without the panel pinning in place. */
+.enquiry-card { display: grid; gap: 16px; align-self: start; }
 .property-title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; }
 .property-title-row h1 { margin: 0; min-width: 0; }
 .save-property-compact { min-width: 92px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--color-line); border-radius: 999px; padding: 0 13px; background: white; color: var(--color-bluegrey); font-weight: 600; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease; }
@@ -851,6 +854,16 @@ input[type="file"]::file-selector-button:hover { border-color: var(--color-orang
 .single-column-profile { max-width: 920px; margin: 0 auto; grid-template-columns: 1fr; }
 .profile-photo-row { display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .profile-photo-controls { display: grid; gap: 10px; }
+.email-manage { display: grid; gap: 10px; border-top: 1px solid var(--color-line); padding-top: 18px; margin-top: 6px; }
+.email-manage h3 { margin: 0; font-size: 1.05rem; }
+.email-current { margin: 0; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.email-badge { font-size: .76rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.email-badge.verified { background: #e9f9ef; color: var(--color-success); }
+.email-badge.unverified { background: #fff6df; color: var(--color-warning); }
+.email-change-row { display: flex; gap: 10px; align-items: stretch; }
+.email-change-row input { flex: 1 1 auto; min-width: 0; }
+.email-change-row .btn { flex: 0 0 auto; }
+@media (max-width: 560px) { .email-change-row { flex-direction: column; } .email-change-row .btn { width: 100%; } }
 .photo-feedback { margin: 0; font-size: .86rem; }
 .btn.is-disabled { opacity: .6; pointer-events: none; }
 .danger-zone { border-color: rgba(190,49,49,.18); background: linear-gradient(180deg, #fff, #fff8f7); }

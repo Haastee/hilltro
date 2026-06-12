@@ -7,7 +7,7 @@ import type { Property, User } from "../../types/domain";
 import { supabase } from "../../utils/supabase";
 import { demoProperties, localPropertyById } from "../../data/properties";
 import { landlordById } from "../../data/landlordProperties";
-import { CalendarField, defaultViewingTime, isValidViewingDateTime, ViewingDateTimePicker } from "../../components/CalendarField";
+import { CalendarField, isValidViewingDateTime, ViewingDateTimePicker } from "../../components/CalendarField";
 import { SelectField } from "../../components/SelectField";
 import { PropertyCard } from "./PropertyCard";
 import { HilltroAvatar, publicLandlordName } from "../../components/HilltroAvatar";
@@ -32,7 +32,7 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
   const [offerStep, setOfferStep] = useState(0);
   const [offer, setOffer] = useState<OfferState>(initialOffer);
   const [viewingDate, setViewingDate] = useState("");
-  const [viewingTime, setViewingTime] = useState(defaultViewingTime);
+  const [viewingTime, setViewingTime] = useState("");
   const [viewingMessage, setViewingMessage] = useState("");
   const [saved, setSaved] = useState(false);
   const [saveToast, setSaveToast] = useState("");
