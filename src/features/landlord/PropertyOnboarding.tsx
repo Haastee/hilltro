@@ -75,6 +75,8 @@ export function PropertyOnboarding() {
   const [dragging, setDragging] = useState(false);
   const [noGas, setNoGas] = useState(false);
   const [missing, setMissing] = useState<Set<string>>(new Set(params.get("missing") ? ["photos"] : []));
+  const [publishError, setPublishError] = useState("");
+  const [publishing, setPublishing] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progress = ((step + 1) / steps.length) * 100;
@@ -337,6 +339,7 @@ export function PropertyOnboarding() {
   }
 
   async function publishListing() {
+    setPublishError("");
     // Validate the whole form. If anything required is missing, jump to that
     // step and highlight it — never block on an invisible error.
     for (let candidate = 0; candidate < steps.length; candidate += 1) {
@@ -349,6 +352,17 @@ export function PropertyOnboarding() {
       }
     }
     setMissing(new Set());
+    setPublishing(true);
+    try {
+      await runPublish();
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : "Could not publish the listing. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function runPublish() {
     const property = {
       id: params.get("propertyId") || `published-${crypto.randomUUID()}`,
       title: `${town || "Verified"} ${details.propertyType}`,
@@ -376,14 +390,14 @@ export function PropertyOnboarding() {
       verifiedEnquiriesOnly: true
     };
     if (import.meta.env.VITE_SUPABASE_URL) {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) {
-        setMissing(new Set(["auth"]));
-        return;
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess.session?.user?.id;
+      if (!uid) {
+        throw new Error("Your session has expired. Please log out and back in, then publish again.");
       }
       const { data, error } = await supabase.from("properties").upsert({
         id: params.get("propertyId") || undefined,
-        landlord_id: user.user.id,
+        landlord_id: uid,
         title: property.title,
         address_line_1: addressLine1,
         address_line_2: addressLine2 || null,
@@ -592,7 +606,7 @@ export function PropertyOnboarding() {
           {step === 8 && <div className="form-grid"><h2>Photos</h2><div className={`dropzone photo-drop ${dragging ? "dragging" : ""} ${missing.has("photos") ? "required-missing" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><div><b>Drag photos here or click to upload</b><p className="muted">Upload at least four images where possible: main image, bedroom, kitchen/bathroom/exterior and another supporting angle.</p>{missing.has("photos") && <small>Upload at least one photo before activation.</small>}</div><input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => event.target.files && addFiles(event.target.files)} /></div><div className="photo-preview-grid">{photos.map((photo, index) => <article className={`photo-preview ${photo.error ? "has-error" : ""}`} key={photo.id}>{photo.url ? <img src={photo.url} alt="" /> : <div className="photo-uploading">{photo.error ? "Upload failed" : "Uploading…"}</div>}<b>{index + 1}. {photo.name}</b>{!photo.error && photo.progress < 100 && <div className="upload-progress"><span style={{ width: `${photo.progress}%` }} /></div>}{photo.error && <small className="photo-error-text">{photo.errorMessage || "Upload failed — use Replace to try again."}</small>}<div className="hero-actions"><button className="btn" onClick={() => reorderPhoto(index, -1)}>Up</button><button className="btn" onClick={() => reorderPhoto(index, 1)}>Down</button><button className="btn" onClick={() => replacePhoto(index)}>Replace</button><button className="btn" onClick={() => setPhotos(photos.filter((item) => item.id !== photo.id))}>Remove</button></div></article>)}</div><Link className="btn" to="/photography">Don't have professional photos? Book Photography with Hilltro</Link></div>}
           {step === 9 && <div className="form-grid"><h2>Upload Floorplan</h2><p className="muted">Optional but encouraged. The floorplan appears as the final gallery image.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFloorplan(event.dataTransfer.files); }} onClick={() => document.getElementById("floorplan-upload")?.click()}><div><b>Drag floorplan here or click to upload</b><p className="muted">Image or PDF accepted. You can replace it later.</p></div><input id="floorplan-upload" type="file" accept="image/*,.pdf" hidden onChange={(event) => event.target.files && addFloorplan(event.target.files)} /></div>{floorplan && <article className="photo-preview single-media-preview"><img src={floorplan.url} alt="" /><b>{floorplan.name}</b><div className="upload-progress"><span style={{ width: `${floorplan.progress}%` }} /></div><button className="btn" type="button" onClick={() => setFloorplan(null)}>Remove floorplan</button></article>}</div>}
           {step === 10 && <div className="form-grid"><h2>Upload Property Video</h2><p className="muted">Properties with video tours typically let faster. Upload a short vertical walkthrough or provide a supported video link.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addVideo(event.dataTransfer.files); }} onClick={() => document.getElementById("video-upload")?.click()}><div><b>Drag video here or click to upload</b><p className="muted">Maximum upload size 200MB. YouTube, Vimeo and reputable hosted links are supported.</p></div><input id="video-upload" type="file" accept="video/*" hidden onChange={(event) => event.target.files && addVideo(event.target.files)} /></div><label className={missing.has("videoUrl") ? "required-missing" : ""}>External video link (optional)<input value={videoUrl} onChange={(event) => updateVideoUrl(event.target.value)} placeholder="https://youtu.be/..." />{(videoError || missing.has("videoUrl")) && <small>{videoError || "Use a supported video URL before continuing."}</small>}</label>{videoTour && <article className="photo-preview single-media-preview"><video src={videoTour.url} controls /><b>{videoTour.name}</b><div className="upload-progress"><span style={{ width: `${videoTour.progress}%` }} /></div><button className="btn" type="button" onClick={() => setVideoTour(null)}>Remove video</button></article>}</div>}
-          {step === 11 && <div><h2>Preview listing</h2><p className="muted">Review photos, address privacy, rental price, description and property summary before publishing.</p><p><b>{addressLine1 ? `${addressLine1}, ${town}` : "Address pending"}</b></p><p>£{(rent || recommendedRent).toLocaleString()} pcm · {details.bedrooms} bed · {details.propertyType}{needsFloor && details.floor ? ` · ${details.floor}` : ""}{floorNeedsLift && details.hasLift ? ` · ${details.hasLift === "Yes" ? "Lift" : "No lift"}` : ""}</p>{availableFrom && <p className="muted">Available from {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(availableFrom))}</p>}{floorplan && <p className="badge">Floorplan attached</p>}{(videoUrl || videoTour) && <p className="badge orange">Video tour attached</p>}{specialFeatures.length > 0 && <div className="feature-pill-grid compact">{specialFeatures.map((feature) => <span className="feature-pill" key={feature}>{feature}</span>)}</div>}<button className="btn primary" onClick={publishListing}>Publish Listing</button></div>}
+          {step === 11 && <div><h2>Preview listing</h2><p className="muted">Review photos, address privacy, rental price, description and property summary before publishing.</p><p><b>{addressLine1 ? `${addressLine1}, ${town}` : "Address pending"}</b></p><p>£{(rent || recommendedRent).toLocaleString()} pcm · {details.bedrooms} bed · {details.propertyType}{needsFloor && details.floor ? ` · ${details.floor}` : ""}{floorNeedsLift && details.hasLift ? ` · ${details.hasLift === "Yes" ? "Lift" : "No lift"}` : ""}</p>{availableFrom && <p className="muted">Available from {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(availableFrom))}</p>}{floorplan && <p className="badge">Floorplan attached</p>}{(videoUrl || videoTour) && <p className="badge orange">Video tour attached</p>}{specialFeatures.length > 0 && <div className="feature-pill-grid compact">{specialFeatures.map((feature) => <span className="feature-pill" key={feature}>{feature}</span>)}</div>}{photos.filter((photo) => photo.url).length > 0 ? <div className="photo-preview-grid preview-photo-grid">{photos.filter((photo) => photo.url).map((photo) => <article className="photo-preview" key={photo.id}><img src={photo.url} alt="" /></article>)}</div> : <p className="notice error">No photos added yet — go back to the Photos step and add at least one.</p>}{publishError && <p className="notice error">{publishError}</p>}<button className="btn primary" disabled={publishing} onClick={publishListing}>{publishing ? "Publishing…" : "Publish Listing"}</button></div>}
           <div className="hero-actions" style={{ marginTop: 24 }}>
             <button className="btn" disabled={step === 0} onClick={() => { setMissing(new Set()); setStep(step - 1); }}>Back</button>
             {step < steps.length - 1 && <button className="btn primary" onClick={continueFlow}>Continue</button>}
