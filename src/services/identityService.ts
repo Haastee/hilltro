@@ -78,10 +78,8 @@ export type ReferencingAddress = {
   postcode?: string;
   country: string;
   international: boolean;
-  // Current address captures a chosen duration; previous addresses derive it from dates.
+  // Every address (current and previous) captures how many months were spent there.
   durationMonths?: number;
-  moveIn?: string;
-  moveOut?: string;
 };
 
 export type ReferencingApplication = {
@@ -114,21 +112,7 @@ export async function saveReferencingApplication(
   if (error) throw new Error(error.message);
 }
 
-// Months between two YYYY-MM-DD dates (used for previous-address durations).
-export function monthsBetween(moveIn?: string, moveOut?: string): number {
-  if (!moveIn) return 0;
-  const start = new Date(moveIn);
-  const end = moveOut ? new Date(moveOut) : new Date();
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
-  return Math.max(0, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
-}
-
-// Total verified months of history. An international current address bypasses the
-// 36-month requirement (we don't validate duration for foreign addresses).
+// Total declared months of address history (sum of every block's duration).
 export function totalHistoryMonths(addresses: ReferencingAddress[]): number {
-  return addresses.reduce((sum, addr, index) => {
-    if (addr.international) return sum; // not duration-validated
-    if (index === 0) return sum + (addr.durationMonths || 0);
-    return sum + monthsBetween(addr.moveIn, addr.moveOut);
-  }, 0);
+  return addresses.reduce((sum, addr) => sum + (addr.durationMonths || 0), 0);
 }

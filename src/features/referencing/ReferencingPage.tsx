@@ -5,7 +5,8 @@ import type { User } from "../../types/domain";
 import { supabase } from "../../utils/supabase";
 import { sanitizeName, nameError, isValidUKPostcode } from "../../utils/validation";
 import { DateOfBirthField, isAtLeast18 } from "../../components/DateOfBirthField";
-import { SelectField } from "../../components/SelectField";
+import { SelectField, type SelectOption } from "../../components/SelectField";
+import { countryOptions } from "../../utils/countries";
 import {
   getIdentityVerification, startIdentityVerification, subscribeIdentityVerification,
   getReferencingApplication, saveReferencingApplication, totalHistoryMonths,
@@ -15,7 +16,11 @@ import {
 type Step = "details" | "address" | "identity";
 const STEP_ORDER: Step[] = ["details", "address", "identity"];
 const STEP_LABELS: Record<Step, string> = { details: "Personal details", address: "Address history", identity: "Identity verification" };
-const DURATIONS = [{ value: "6", label: "6 months" }, { value: "12", label: "12 months" }, { value: "24", label: "24 months" }, { value: "36", label: "36+ months" }];
+// Granular 0 → 36+ months (36 = "36 or more", which satisfies the 3-year rule).
+const DURATIONS: SelectOption[] = [
+  { value: "", label: "Select duration" },
+  ...Array.from({ length: 37 }, (_, m) => ({ value: String(m), label: m === 36 ? "36+ months" : `${m} ${m === 1 ? "month" : "months"}` })),
+];
 const REQUIRED_MONTHS = 36;
 
 function emptyAddress(): ReferencingAddress {
@@ -75,23 +80,25 @@ export function ReferencingPage({ user, onUserChange }: { user: User; onUserChan
   const totalMonths = totalHistoryMonths(addresses);
   const needsMore = !bypass && totalMonths < REQUIRED_MONTHS;
 
+  // Keep exactly the right number of previous-address blocks: reveal another
+  // while the declared history is under 36 months, and drop now-unneeded trailing
+  // blocks the moment a longer duration pushes the total to 36+.
   useEffect(() => {
-    if (!loaded || !needsMore) return;
-    const last = addresses[addresses.length - 1];
-    const lastUsable = addresses.length === 1
-      ? Boolean(current?.durationMonths)
-      : Boolean(last?.line1?.trim() && (last?.international || last?.moveIn));
-    if (lastUsable) setAddresses((prev) => [...prev, emptyAddress()]);
-  }, [loaded, needsMore, addresses, current]);
+    if (!loaded) return;
+    setAddresses((prev) => {
+      const next = reconcileAddresses(prev);
+      return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+    });
+  }, [loaded, addresses]);
 
   const detailsComplete = Boolean(firstName.trim() && lastName.trim() && dob && !dobError);
   const addressComplete = useMemo(() => {
     if (!current?.line1.trim()) return false;
-    if (current.international) return true;
+    if (current.international) return Boolean(current.country?.trim());
     if (!isValidUKPostcode(current.postcode || "")) return false;
-    if (!current.durationMonths) return false;
+    if (current.durationMonths == null) return false;
     if (totalMonths < REQUIRED_MONTHS) return false;
-    return addresses.slice(1).every((a) => a.international ? a.line1.trim() : (a.line1.trim() && a.moveIn));
+    return addresses.slice(1).every((a) => Boolean(a.line1.trim()) && a.durationMonths != null && (!a.international || Boolean(a.country?.trim())));
   }, [addresses, current, totalMonths]);
   const identityComplete = identity.status === "approved";
 
@@ -234,19 +241,11 @@ export function ReferencingPage({ user, onUserChange }: { user: User; onUserChan
               <p className="field-subhint">We need three years of address history. Your information is safe.</p>
 
               <AddressBlock title="Current address" address={current} onChange={(p) => updateAddress(0, p)} isCurrent />
-              {!bypass && (
-                <label className="ref-duration">How long have you lived here? *
-                  <select value={current?.durationMonths || ""} onChange={(e) => updateAddress(0, { durationMonths: Number(e.target.value) })}>
-                    <option value="" disabled>Select</option>
-                    {DURATIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </select>
-                </label>
-              )}
               {!bypass && needsMore && (
                 <p className="notice">We need {REQUIRED_MONTHS - totalMonths} more month{REQUIRED_MONTHS - totalMonths === 1 ? "" : "s"} — please add your previous address.</p>
               )}
               {addresses.slice(1).map((addr, i) => (
-                <AddressBlock key={i + 1} title={`Previous address ${i + 1}`} address={addr} onChange={(p) => updateAddress(i + 1, p)} withDates />
+                <AddressBlock key={i + 1} title={`Previous address ${i + 1}`} address={addr} onChange={(p) => updateAddress(i + 1, p)} />
               ))}
 
               <div className="hero-actions ref-flow-actions">
@@ -327,33 +326,61 @@ function StatusRow({ label, chip, tone }: { label: string; chip: string; tone: "
   );
 }
 
-function AddressBlock({ title, address, onChange, isCurrent, withDates }: {
+const COUNTRY_OPTIONS: SelectOption[] = [{ value: "", label: "Select country" }, ...countryOptions()];
+
+function AddressBlock({ title, address, onChange, isCurrent }: {
   title: string;
   address: ReferencingAddress | undefined;
   onChange: (patch: Partial<ReferencingAddress>) => void;
   isCurrent?: boolean;
-  withDates?: boolean;
 }) {
   const a = address || emptyAddress();
-  const postcodeInvalid = isCurrent && !a.international && Boolean(a.postcode) && !isValidUKPostcode(a.postcode || "");
+  const postcodeInvalid = !a.international && Boolean(a.postcode) && !isValidUKPostcode(a.postcode || "");
+  // A foreign current address needs no duration (one address is enough to proceed).
+  const showDuration = !(isCurrent && a.international);
   return (
     <div className="address-block">
       <h3>{title}</h3>
       <label>Address Line 1 *<input value={a.line1} onChange={(e) => onChange({ line1: e.target.value })} /></label>
       <label>Address Line 2 (optional)<input value={a.line2 || ""} onChange={(e) => onChange({ line2: e.target.value })} /></label>
-      <div className="form-grid two">
-        {!a.international && (
-          <label className={postcodeInvalid ? "required-missing" : ""}>Postcode {isCurrent ? "*" : ""}<input value={a.postcode || ""} onChange={(e) => onChange({ postcode: e.target.value })} />{postcodeInvalid && <small>Enter a valid UK postcode.</small>}</label>
-        )}
-        <label>Country<input value={a.country} onChange={(e) => onChange({ country: e.target.value })} /></label>
-      </div>
-      {withDates && (
+      {!a.international ? (
         <div className="form-grid two">
-          <label>Move in date *<input type="date" value={a.moveIn || ""} onChange={(e) => onChange({ moveIn: e.target.value })} /></label>
-          <label>Move out date<input type="date" value={a.moveOut || ""} onChange={(e) => onChange({ moveOut: e.target.value })} /></label>
+          <label className={postcodeInvalid ? "required-missing" : ""}>Postcode {isCurrent ? "*" : ""}<input value={a.postcode || ""} onChange={(e) => onChange({ postcode: e.target.value })} />{postcodeInvalid && <small>Enter a valid UK postcode.</small>}</label>
+          <label>Country<input className="readonly-input" value="United Kingdom" readOnly disabled /></label>
         </div>
+      ) : (
+        <SelectField label="Country *" searchable compactMenu value={a.country} options={COUNTRY_OPTIONS} onChange={(v) => onChange({ country: v })} />
       )}
-      <label className="intl-check"><input type="checkbox" checked={a.international} onChange={(e) => onChange({ international: e.target.checked, postcode: e.target.checked ? "" : a.postcode })} /> This address is outside the United Kingdom</label>
+      {showDuration && (
+        <SelectField
+          label={isCurrent ? "How long have you lived here? *" : "How long did you live here? *"}
+          className="ref-duration"
+          compactMenu
+          value={a.durationMonths != null ? String(a.durationMonths) : ""}
+          options={DURATIONS}
+          onChange={(v) => onChange({ durationMonths: v === "" ? undefined : Number(v) })}
+        />
+      )}
+      <label className="intl-check"><input type="checkbox" checked={a.international} onChange={(e) => onChange({ international: e.target.checked, postcode: e.target.checked ? "" : a.postcode, country: e.target.checked ? "" : "United Kingdom" })} /> This address is outside the United Kingdom</label>
     </div>
   );
+}
+
+// Reveal/hide previous-address blocks based on declared months. A foreign current
+// address short-circuits to a single block (one address is enough). Otherwise we
+// add blocks while the total is under 36 months and trim any trailing surplus.
+function reconcileAddresses(list: ReferencingAddress[]): ReferencingAddress[] {
+  const current = list[0] || emptyAddress();
+  if (current.international) return [current];
+  const result = [current];
+  let total = current.durationMonths || 0;
+  let idx = 1;
+  while (total < REQUIRED_MONTHS) {
+    const next = list[idx] || emptyAddress();
+    result.push(next);
+    idx++;
+    if (next.durationMonths == null) break; // wait for this block to be filled in
+    total += next.durationMonths;
+  }
+  return result;
 }
