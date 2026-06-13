@@ -143,7 +143,7 @@ export function App() {
         <Route path="/tenant/searches" element={<Protected user={user} ready={authReady} role="TENANT"><TenantWorkspacePage page="saved" user={user!} /></Protected>} />
         <Route path="/tenant/profile" element={<Protected user={user} ready={authReady} role="TENANT"><ProfilePage user={user!} onUserChange={setUser} /></Protected>} />
         <Route path="/landlord/profile" element={<Protected user={user} ready={authReady} role="LANDLORD"><ProfilePage user={user!} onUserChange={setUser} /></Protected>} />
-        <Route path="/referencing" element={<Protected user={user} ready={authReady} role="TENANT"><ReferencingPage /></Protected>} />
+        <Route path="/referencing" element={<Protected user={user} ready={authReady} role="TENANT"><ReferencingPage user={user!} onUserChange={setUser} /></Protected>} />
         <Route path="/landlord" element={<Protected user={user} ready={authReady} role="LANDLORD"><LandlordDashboard user={user!} /></Protected>} />
         <Route path="/landlord/properties" element={<Protected user={user} ready={authReady} role="LANDLORD"><MyPropertiesPage /></Protected>} />
         <Route path="/landlord/offers" element={<Protected user={user} ready={authReady} role="LANDLORD"><MyPropertiesPage offerGuidance /></Protected>} />
