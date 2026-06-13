@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { SelectField, type SelectOption } from "./SelectField";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -7,56 +8,63 @@ function daysInMonth(year: number, month1to12: number): number {
   return new Date(year, month1to12, 0).getDate();
 }
 
-// Three fast selectors (Day / Month / Year). Mobile-friendly native dropdowns,
-// no month-by-month scrolling, and the user can jump straight to a birth year.
-// Emits an ISO yyyy-mm-dd string (or "" while incomplete).
+// Three neat, on-brand dropdowns (Day / Month / Year) built on the design-system
+// SelectField. Partial selections persist; an ISO yyyy-mm-dd is emitted only
+// once all three are chosen. Year is searchable so a birth year is one tap/type.
 export function DateOfBirthField({ value, onChange, label = "Date of birth *" }: {
   value: string;
   onChange: (iso: string) => void;
   label?: string;
 }) {
-  const [yy, mm, dd] = useMemo(() => {
-    const [y, m, d] = (value || "").split("-");
-    return [y || "", m || "", d || ""];
+  const [yy, setYy] = useState("");
+  const [mm, setMm] = useState("");
+  const [dd, setDd] = useState("");
+
+  // Sync down only when the parent supplies a complete date (e.g. loaded draft).
+  useEffect(() => {
+    if (!value) return;
+    const [y, m, d] = value.split("-");
+    if (y && m && d) { setYy(y); setMm(String(Number(m))); setDd(String(Number(d))); }
   }, [value]);
 
   const now = new Date();
   const years = useMemo(() => {
-    const top = now.getFullYear() - 18; // oldest eligible birth year shown first
-    const out: number[] = [];
-    for (let y = top; y >= now.getFullYear() - 100; y--) out.push(y);
+    const top = now.getFullYear() - 18;
+    const out: SelectOption[] = [{ value: "", label: "Year" }];
+    for (let y = top; y >= now.getFullYear() - 100; y--) out.push({ value: String(y), label: String(y) });
     return out;
   }, [now]);
 
-  const dayCount = daysInMonth(Number(yy), Number(mm));
-  const days = useMemo(() => Array.from({ length: dayCount }, (_, i) => i + 1), [dayCount]);
+  const dayOptions = useMemo<SelectOption[]>(() => {
+    const count = daysInMonth(Number(yy), Number(mm));
+    return [{ value: "", label: "Day" }, ...Array.from({ length: count }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
+  }, [yy, mm]);
 
-  function emit(nextY: string, nextM: string, nextD: string) {
-    if (!nextY || !nextM || !nextD) { onChange(""); return; }
-    // Clamp day to the month's length (e.g. switching to February).
-    const maxDay = daysInMonth(Number(nextY), Number(nextM));
-    const day = Math.min(Number(nextD), maxDay);
-    onChange(`${nextY}-${nextM.padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  const monthOptions = useMemo<SelectOption[]>(
+    () => [{ value: "", label: "Month" }, ...MONTHS.map((name, i) => ({ value: String(i + 1), label: name }))],
+    [],
+  );
+
+  function update(ny: string, nm: string, nd: string) {
+    // Clamp the day if the new month/year is shorter (e.g. switching to February).
+    if (ny && nm && nd) {
+      const maxDay = daysInMonth(Number(ny), Number(nm));
+      if (Number(nd) > maxDay) nd = String(maxDay);
+    }
+    setYy(ny); setMm(nm); setDd(nd);
+    if (ny && nm && nd) onChange(`${ny}-${nm.padStart(2, "0")}-${nd.padStart(2, "0")}`);
+    else onChange("");
   }
 
   return (
-    <label className="dob-field">
-      {label}
+    <div className="dob-field">
+      <span className="dob-label">{label}</span>
       <div className="dob-selects">
-        <select aria-label="Day" value={dd ? String(Number(dd)) : ""} onChange={(e) => emit(yy, mm, e.target.value)}>
-          <option value="" disabled>Day</option>
-          {days.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select aria-label="Month" value={mm ? String(Number(mm)) : ""} onChange={(e) => emit(yy, e.target.value, dd)}>
-          <option value="" disabled>Month</option>
-          {MONTHS.map((name, i) => <option key={name} value={i + 1}>{name}</option>)}
-        </select>
-        <select aria-label="Year" value={yy} onChange={(e) => emit(e.target.value, mm, dd)}>
-          <option value="" disabled>Year</option>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
+        <SelectField label="" value={dd} options={dayOptions} compactMenu onChange={(v) => update(yy, mm, v)} />
+        <SelectField label="" value={mm} options={monthOptions} compactMenu onChange={(v) => update(yy, v, dd)} />
+        <SelectField label="" value={yy} options={years} compactMenu searchable initialScrollValue={yy || String(now.getFullYear() - 30)} onChange={(v) => update(v, mm, dd)} />
       </div>
-    </label>
+    </div>
   );
 }
 

@@ -47,6 +47,15 @@ Deno.serve(async (req) => {
   const workflowId = cfg?.workflow_id as string | undefined;
   if (!apiKey || !workflowId) return json({ error: "Verification is not configured" }, 500, cors);
 
+  // Cap Didit usage at 500 verification checks per calendar month.
+  const MONTHLY_CAP = 500;
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const { count } = await admin.from("didit_session_log").select("*", { count: "exact", head: true }).gte("created_at", monthStart);
+  if ((count ?? 0) >= MONTHLY_CAP) {
+    return json({ error: "We've reached this month's verification limit. Please try again next month." }, 429, cors);
+  }
+
   let body: { callbackUrl?: string } = {};
   try { body = await req.json(); } catch { /* body is optional */ }
 
@@ -70,10 +79,13 @@ Deno.serve(async (req) => {
 
   // One identity_verifications row per user; a retry resets it to pending.
   const { error: upErr } = await admin.from("identity_verifications").upsert(
-    { user_id: user.id, didit_session_id: session.session_id, status: "pending" },
+    { user_id: user.id, didit_session_id: session.session_id, didit_session_url: session.url, status: "pending" },
     { onConflict: "user_id" },
   );
   if (upErr) console.error("identity_verifications upsert error", upErr);
+
+  // Record usage for the monthly cap.
+  await admin.from("didit_session_log").insert({ user_id: user.id, session_id: session.session_id });
 
   return json({ url: session.url, session_id: session.session_id, status: session.status }, 200, cors);
 });

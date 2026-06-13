@@ -7,21 +7,23 @@ export type IdentityStatus =
 export type IdentityVerification = {
   status: IdentityStatus;
   diditSessionId: string | null;
+  sessionUrl: string | null;
   reviewedAt: string | null;
   updatedAt: string | null;
 };
 
-const NONE: IdentityVerification = { status: "none", diditSessionId: null, reviewedAt: null, updatedAt: null };
+const NONE: IdentityVerification = { status: "none", diditSessionId: null, sessionUrl: null, reviewedAt: null, updatedAt: null };
 
 export async function getIdentityVerification(): Promise<IdentityVerification> {
   const { data } = await supabase
     .from("identity_verifications")
-    .select("status, didit_session_id, reviewed_at, updated_at")
+    .select("status, didit_session_id, didit_session_url, reviewed_at, updated_at")
     .maybeSingle();
   if (!data) return NONE;
   return {
     status: (data.status as IdentityStatus) || "pending",
     diditSessionId: data.didit_session_id,
+    sessionUrl: data.didit_session_url,
     reviewedAt: data.reviewed_at,
     updatedAt: data.updated_at,
   };
@@ -31,7 +33,16 @@ export async function getIdentityVerification(): Promise<IdentityVerification> {
 // verification URL the user is redirected to.
 export async function startIdentityVerification(callbackUrl: string): Promise<{ url: string }> {
   const { data, error } = await supabase.functions.invoke("referencing-session", { body: { callbackUrl } });
-  if (error) throw new Error("We couldn't start verification just now. Please try again in a moment.");
+  if (error) {
+    // Surface the function's own message (e.g. the monthly cap) when present.
+    let message = "We couldn't start verification just now. Please try again in a moment.";
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const body = ctx && typeof ctx.json === "function" ? await ctx.json() : null;
+      if (body?.error) message = body.error as string;
+    } catch { /* keep the default */ }
+    throw new Error(message);
+  }
   if (!data?.url) throw new Error("Verification could not be started. Please try again.");
   return { url: data.url as string };
 }
@@ -49,6 +60,7 @@ export function subscribeIdentityVerification(userId: string, onChange: (v: Iden
         onChange({
           status: (row.status as IdentityStatus) || "pending",
           diditSessionId: (row.didit_session_id as string) ?? null,
+          sessionUrl: (row.didit_session_url as string) ?? null,
           reviewedAt: (row.reviewed_at as string) ?? null,
           updatedAt: (row.updated_at as string) ?? null,
         });
