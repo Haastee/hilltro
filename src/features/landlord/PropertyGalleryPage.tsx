@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { managedProperties } from "../../data/landlordProperties";
-import { assetUrl } from "../../utils/asset";
+import { propertyImagesComingSoon } from "../../utils/propertyAssets";
 
 export function PropertyGalleryPage() {
   const { propertyId } = useParams();
@@ -55,7 +55,7 @@ export function PropertyGalleryPage() {
             <div className={`gallery-thumb ${selected === index ? "active" : ""}`} key={`${image}-${index}`}>
               <button onClick={() => setSelected(index)}><img src={image} alt="" /><span>{index + 1}</span></button>
               {progress[image] !== undefined && <div className="upload-progress"><span style={{ width: `${progress[image]}%` }} /></div>}
-              {editing && <div className="hero-actions"><button className="btn" onClick={() => reorder(index, -1)}>Up</button><button className="btn" onClick={() => reorder(index, 1)}>Down</button><button className="btn" onClick={() => setImages(images.filter((_, itemIndex) => itemIndex !== index))}>Delete</button><button className="btn" onClick={() => setImages(images.map((item, itemIndex) => itemIndex === index ? assetUrl("assets/properties/london-apartment-photo.png") : item))}>Replace</button></div>}
+              {editing && <div className="hero-actions"><button className="btn" onClick={() => reorder(index, -1)}>Up</button><button className="btn" onClick={() => reorder(index, 1)}>Down</button><button className="btn" onClick={() => setImages(images.filter((_, itemIndex) => itemIndex !== index))}>Delete</button><button className="btn" onClick={() => setImages(images.map((item, itemIndex) => itemIndex === index ? propertyImagesComingSoon : item))}>Replace</button></div>}
             </div>
           ))}
           {editing && <button className="btn primary" onClick={() => inputRef.current?.click()}>Upload Photo</button>}

@@ -37,12 +37,19 @@ export type Property = {
   features?: string[];
   floorLevel?: string;
   hasLift?: boolean;
+  epcRating?: string;
+  epcExempt?: boolean;
+  epcCertificateUrl?: string;
+  epcCertificateName?: string;
   latitude?: number;
   longitude?: number;
   status: "DRAFT" | "REVIEW" | "LIVE" | "LET";
   verifiedEnquiriesOnly: boolean;
   slightlyAboveBudget?: boolean;
   landlordId?: string;
+  landlordFirstName?: string;
+  landlordAvatarUrl?: string;
+  landlordType?: "Private Landlord" | "Professional Landlord";
 };
 
 export type Conversation = {

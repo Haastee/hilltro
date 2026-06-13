@@ -5,11 +5,11 @@ import { lookupPostcode, suggestPostcodes } from "../../data/addressLookup";
 import { SelectField } from "../../components/SelectField";
 import { CalendarField } from "../../components/CalendarField";
 import type { PostcodeLookup } from "../../services/postcodesIo";
-import { deletePropertyDraft, savePropertyDraft, savePublishedProperty } from "../../services/propertyStore";
+import { deletePropertyDraft, loadPropertyDrafts, savePropertyDraft, savePublishedProperty } from "../../services/propertyStore";
 import { currentLandlordId } from "../../services/supabaseServices";
 import { storageService } from "../../services/storageService";
 import { supabase } from "../../utils/supabase";
-import { assetUrl } from "../../utils/asset";
+import { propertyImagesComingSoon } from "../../utils/propertyAssets";
 import { isSupportedVideoUrl, videoProviderName } from "../../utils/propertyMedia";
 
 const steps = ["Address", "Property Type", "Rooms", "Features", "Description", "Special Features", "Availability", "Valuation", "Photos", "Floorplan", "Video", "Preview"];
@@ -17,6 +17,10 @@ const propertyTypes = ["Flat", "Penthouse", "House", "Maisonette", "Detached Hou
 const houseTypes = ["House", "Detached House", "Semi-Detached House", "Terraced House", "Bungalow"];
 const floorOptions = ["Basement", "Ground floor", "1st floor", "2nd floor", "3rd floor", "4th floor", "5th floor", "6th floor or higher"];
 const floorLevelNumber = (floor: string) => floor === "Basement" ? -1 : floor === "Ground floor" ? 0 : floor.startsWith("6th") ? 6 : parseInt(floor, 10) || 0;
+const bedroomOptions = ["0", "1", "2", "3", "4", "5", "5+"];
+const bathroomOptions = ["0", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
+const receptionOptions = ["0", "1", "2", "3", "4", "5+"];
+const epcRatings = ["A", "B", "C", "D", "E", "F", "G"];
 const outsideOptions = ["Garden", "Terrace", "Patio", "Balcony", "Roof Terrace"];
 const parkingOptions = ["No Parking", "On Street", "Resident Permit Available", "Off Street Parking", "Off-Street Parking (Separate Charge)", "Garage", "Underground Parking", "Allocated Space"];
 const furnishingOptions = ["Furnished", "Part Furnished", "Unfurnished", "Flexible", "Open To Discussion"];
@@ -53,6 +57,7 @@ export function PropertyOnboarding() {
   const [postcodeSuggestions, setPostcodeSuggestions] = useState<string[]>([]);
   const [addressLine1, setAddressLine1] = useState("");
   const [addressLine2, setAddressLine2] = useState("");
+  const [buildingName, setBuildingName] = useState("");
   const [town, setTown] = useState("");
   // Nothing is pre-filled — every required attribute must be deliberately
   // chosen by the landlord.
@@ -77,6 +82,10 @@ export function PropertyOnboarding() {
   const [videoTour, setVideoTour] = useState<UploadedPhoto | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [videoError, setVideoError] = useState("");
+  const [epcRating, setEpcRating] = useState("");
+  const [epcExempt, setEpcExempt] = useState(false);
+  const [epcCertificate, setEpcCertificate] = useState<UploadedPhoto | null>(null);
+  const [epcError, setEpcError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [noGas, setNoGas] = useState(false);
   const [missing, setMissing] = useState<Set<string>>(new Set(params.get("missing") ? ["photos"] : []));
@@ -96,6 +105,10 @@ export function PropertyOnboarding() {
   const draftId = params.get("propertyId") || "local-draft";
   const needsFloor = !houseTypes.includes(details.propertyType);
   const floorNeedsLift = needsFloor && floorLevelNumber(details.floor) >= 2;
+  const selectedBedrooms = bedroomCount(details.bedrooms);
+  const selectedReceptions = countValue(details.receptions);
+  const successfulPhotos = photos.filter((photo) => photo.url && !photo.error);
+  const epcNeedsExemption = epcRating === "F" || epcRating === "G";
 
   useEffect(() => {
     let alive = true;
@@ -116,8 +129,15 @@ export function PropertyOnboarding() {
       setReady(true);
       return;
     }
-    const draft = JSON.parse(localStorage.getItem(`${DRAFT_KEY}.${landlordId}`) || "null");
+    const draftKey = `${DRAFT_KEY}.${landlordId}`;
+    const draft = JSON.parse(localStorage.getItem(draftKey) || "null");
     const hasContent = Boolean(draft && (draft.addressLine1 || draft.postcode || draft.details?.propertyType || draft.rent));
+    const hasSavedDraftSummary = loadPropertyDrafts(landlordId).some((item) => item.id === draftId);
+    if (hasContent && !hasSavedDraftSummary && draftId === "local-draft") {
+      localStorage.removeItem(draftKey);
+      setReady(true);
+      return;
+    }
     const explicit = Boolean(params.get("propertyId") || params.get("resume"));
     // Came in via "Add Property" with an unfinished draft → ask, don't auto-load.
     if (resumeChoice === "auto" && hasContent && !explicit) {
@@ -129,6 +149,7 @@ export function PropertyOnboarding() {
       setPostcode(draft.postcode || "");
       setAddressLine1(draft.addressLine1 || "");
       setAddressLine2(draft.addressLine2 || "");
+      setBuildingName(draft.buildingName || "");
       setTown(draft.town || "");
       // Merge over the full default shape so a partial/legacy draft can never
       // leave required keys (e.g. outsideTypes) undefined and crash the render.
@@ -140,6 +161,9 @@ export function PropertyOnboarding() {
       if (draft.floorplan) setFloorplan(draft.floorplan);
       if (draft.videoTour) setVideoTour(draft.videoTour);
       if (draft.videoUrl) setVideoUrl(draft.videoUrl);
+      setEpcRating(draft.epcRating || "");
+      setEpcExempt(Boolean(draft.epcExempt));
+      if (draft.epcCertificate) setEpcCertificate(draft.epcCertificate);
     }
     setReady(true);
   }, [params, landlordId, resumeChoice]);
@@ -147,13 +171,13 @@ export function PropertyOnboarding() {
   useEffect(() => {
     const id = window.setTimeout(() => {
       if (!landlordId || !ready) return;
-      const payload = { step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, photos, floorplan, videoTour, videoUrl };
+      const payload = { step, postcode, addressLine1, addressLine2, buildingName, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl, epcRating, epcExempt, epcCertificate };
       localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify(payload));
       savePropertyDraft({
         id: draftId,
         ownerId: landlordId,
         title: `${town || "Draft"} ${details.propertyType}`,
-        address: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", ") || "Address pending",
+        address: [addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || addressLine2, buildingName, town, postcode].filter(Boolean).join(", ") || "Address pending",
         postcode,
         bedrooms: details.bedrooms,
         bathrooms: details.bathrooms,
@@ -164,7 +188,7 @@ export function PropertyOnboarding() {
       });
     }, 500);
     return () => window.clearTimeout(id);
-  }, [addressLine1, addressLine2, details, draftId, floorplan, landlordId, photos, postcode, ready, rent, specialFeatures, step, town, videoTour, videoUrl]);
+  }, [addressLine1, addressLine2, availableFrom, buildingName, details, draftId, epcCertificate, epcExempt, epcRating, floorplan, landlordId, photos, postcode, ready, rent, specialFeatures, step, town, videoTour, videoUrl]);
 
   function toggleOutside(value: string) {
     const selected = details.outsideTypes.includes(value)
@@ -233,6 +257,25 @@ export function PropertyOnboarding() {
     setVideoTour({ id, name: uploaded.name, url: uploaded.url, progress: 100 });
   }
 
+  async function addEpcCertificate(fileList: FileList | File[]) {
+    const file = [...fileList].find((item) => item.type.startsWith("image/") || item.type === "application/pdf");
+    if (!file) {
+      setEpcError("Choose a PDF or image EPC certificate.");
+      return;
+    }
+    setEpcError("");
+    const id = crypto.randomUUID();
+    setEpcCertificate({ id, name: file.name, url: "", progress: 5 });
+    try {
+      const uploaded = await storageService.uploadImage(file, (progress) => setEpcCertificate((current) => current?.id === id ? { ...current, progress } : current));
+      setEpcCertificate({ id, name: uploaded.name, url: uploaded.url, progress: 100 });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "EPC upload failed.";
+      setEpcError(message);
+      setEpcCertificate({ id, name: file.name, url: "", progress: 0, error: true, errorMessage: message });
+    }
+  }
+
   function updateVideoUrl(value: string) {
     setVideoUrl(value);
     if (!value.trim()) {
@@ -280,7 +323,8 @@ export function PropertyOnboarding() {
     if (targetStep === 0) {
       if (!postcode.trim()) missingFields.add("postcode");
       if (!postcodeData) missingFields.add("postcodeLookup");
-      if (!addressLine1.trim()) missingFields.add("address");
+      if (!addressLine1.trim()) missingFields.add("buildingNumber");
+      if (!addressLine2.trim()) missingFields.add("streetName");
       if (!town.trim()) missingFields.add("town");
     }
     if (targetStep === 1) {
@@ -289,8 +333,9 @@ export function PropertyOnboarding() {
     }
     if (targetStep === 2) {
       if (!details.bedrooms) missingFields.add("bedrooms");
-      if (!details.bathrooms || Number(details.bathrooms) < 1) missingFields.add("bathrooms");
+      if (!details.bathrooms) missingFields.add("bathrooms");
       if (details.receptions === "" || Number(details.receptions) < 0) missingFields.add("receptions");
+      if (selectedBedrooms >= 1 && selectedReceptions < 1) missingFields.add("receptionsBedroomRule");
     }
     if (targetStep === 3) {
       if (!details.furnishing) missingFields.add("furnishing");
@@ -301,7 +346,11 @@ export function PropertyOnboarding() {
     if (targetStep === 4 && !details.description.trim()) missingFields.add("description");
     if (targetStep === 6 && !availableFrom) missingFields.add("availableFrom");
     if (targetStep === 7 && !rent) missingFields.add("rent");
-    if (targetStep === 8 && photos.length < 1) missingFields.add("photos");
+    if (targetStep === 4) {
+      if (!epcRating && !epcCertificate?.url) missingFields.add("epc");
+      if (epcNeedsExemption && !epcExempt) missingFields.add("epcExempt");
+    }
+    if (targetStep === 8 && successfulPhotos.length < 1) missingFields.add("photos");
     if (targetStep === 10 && videoUrl.trim() && !isSupportedVideoUrl(videoUrl)) missingFields.add("videoUrl");
     return missingFields;
   }
@@ -329,17 +378,17 @@ export function PropertyOnboarding() {
           id: params.get("propertyId") || undefined,
           landlord_id: user.user.id,
           title: `${town || "Draft"} ${details.propertyType}`,
-          address_line_1: addressLine1 || "Address pending",
-          address_line_2: addressLine2 || null,
+          address_line_1: addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || "Address pending",
+          address_line_2: buildingName || null,
           city: town || postcodeData?.admin_district || "Unknown",
           postcode: postcode || "Unknown",
           postcode_district: postcode.trim().split(/\s+/)[0] || "Unknown",
           latitude: postcodeData?.latitude || null,
           longitude: postcodeData?.longitude || null,
           property_type: details.propertyType,
-          bedrooms: details.bedrooms === "Studio" ? 1 : details.bedrooms === "5+" ? 5 : Number(details.bedrooms),
-          bathrooms: Number(details.bathrooms),
-          receptions: Number(details.receptions),
+          bedrooms: bedroomCount(details.bedrooms),
+          bathrooms: bathroomCount(details.bathrooms),
+          receptions: countValue(details.receptions),
           outside_space: details.outsideTypes,
           parking: details.parking,
           furnishing: details.furnishing,
@@ -347,26 +396,27 @@ export function PropertyOnboarding() {
           floor_level: needsFloor ? (details.floor || null) : null,
           has_lift: floorNeedsLift && details.hasLift ? details.hasLift === "Yes" : null,
           available_from: availableFrom || null,
+          compliance: compliancePayload(epcRating, epcExempt, epcCertificate),
           rent_pcm: Number(rent || 0),
           status: "draft",
           draft_step: step,
-          draft_payload: { postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl }
+          draft_payload: { postcode, addressLine1, addressLine2, buildingName, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl, epcRating, epcExempt, epcCertificate }
         });
       }
     }
-    localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify({ step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl }));
+    localStorage.setItem(`${DRAFT_KEY}.${landlordId}`, JSON.stringify({ step, postcode, addressLine1, addressLine2, buildingName, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl, epcRating, epcExempt, epcCertificate }));
     savePropertyDraft({
       id: draftId,
       ownerId: landlordId,
       title: `${town || "Draft"} ${details.propertyType}`,
-      address: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", ") || "Address pending",
+      address: [addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || addressLine2, buildingName, town, postcode].filter(Boolean).join(", ") || "Address pending",
       postcode,
       bedrooms: details.bedrooms,
       bathrooms: details.bathrooms,
       rent,
       step,
       updatedAt: new Date().toISOString(),
-      payload: { step, postcode, addressLine1, addressLine2, town, details, specialFeatures, rent, photos, floorplan, videoTour, videoUrl }
+      payload: { step, postcode, addressLine1, addressLine2, buildingName, town, details, specialFeatures, rent, availableFrom, photos, floorplan, videoTour, videoUrl, epcRating, epcExempt, epcCertificate }
     });
   }
 
@@ -421,22 +471,26 @@ export function PropertyOnboarding() {
       area: town || postcodeData?.admin_district || "Area",
       city: town || postcodeData?.admin_district || "London",
       postcodeDistrict: postcode.trim().split(/\s+/)[0] || "W8",
-      fullAddress: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", "),
+      fullAddress: [addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || addressLine2, buildingName, town, postcode].filter(Boolean).join(", "),
       postcode,
       type: details.propertyType,
-      bedrooms: details.bedrooms === "Studio" ? 1 : details.bedrooms === "5+" ? 5 : Number(details.bedrooms),
-      bathrooms: Number(details.bathrooms),
+      bedrooms: bedroomCount(details.bedrooms),
+      bathrooms: bathroomCount(details.bathrooms),
       rentPcm: Number(rent || recommendedRent),
       availableFrom: availableFrom || new Date().toISOString().slice(0, 10),
       furnishingStatus: details.furnishing,
       description: details.description,
       features: [...specialFeatures, ...details.outsideTypes],
-      imageUrl: photos[0]?.url || assetUrl("assets/properties/london-apartment-photo.png"),
-      imageUrls: photos.map((photo) => photo.url).filter(Boolean),
+      imageUrl: successfulPhotos[0]?.url || propertyImagesComingSoon,
+      imageUrls: successfulPhotos.map((photo) => photo.url),
       floorplanUrl: floorplan?.url || undefined,
       videoUrl: videoUrl.trim() || videoTour?.url || undefined,
       videoProvider: videoUrl.trim() ? videoProviderName(videoUrl) : videoTour ? "Uploaded video" : undefined,
-      videoThumbnailUrl: photos[0]?.url || undefined,
+      videoThumbnailUrl: successfulPhotos[0]?.url || undefined,
+      epcRating: epcRating || undefined,
+      epcExempt,
+      epcCertificateUrl: epcCertificate?.url || undefined,
+      epcCertificateName: epcCertificate?.name || undefined,
       status: "LIVE" as const,
       verifiedEnquiriesOnly: true
     };
@@ -450,8 +504,8 @@ export function PropertyOnboarding() {
         id: params.get("propertyId") || undefined,
         landlord_id: uid,
         title: property.title,
-        address_line_1: addressLine1,
-        address_line_2: addressLine2 || null,
+        address_line_1: addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1,
+        address_line_2: buildingName || null,
         city: town || postcodeData?.admin_district || "Unknown",
         postcode,
         postcode_district: property.postcodeDistrict,
@@ -460,7 +514,7 @@ export function PropertyOnboarding() {
         property_type: details.propertyType,
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
-        receptions: Number(details.receptions),
+        receptions: countValue(details.receptions),
         outside_space: [...new Set([...details.outsideTypes, ...specialFeatures])],
         parking: details.parking,
         furnishing: details.furnishing,
@@ -468,6 +522,7 @@ export function PropertyOnboarding() {
         floor_level: needsFloor ? (details.floor || null) : null,
         has_lift: floorNeedsLift && details.hasLift ? details.hasLift === "Yes" : null,
         available_from: availableFrom || null,
+        compliance: compliancePayload(epcRating, epcExempt, epcCertificate),
         rent_pcm: property.rentPcm,
         status: "live",
         draft_step: steps.length - 1,
@@ -476,9 +531,9 @@ export function PropertyOnboarding() {
       if (error) throw new Error(error.message);
       if (data?.id) {
         await supabase.from("property_photos").delete().eq("property_id", data.id);
-        if (photos.length) await supabase.from("property_photos").insert(photos.map((photo, index) => ({ property_id: data.id, public_url: photo.url, storage_path: photo.name, sort_order: index })));
+        if (successfulPhotos.length) await supabase.from("property_photos").insert(successfulPhotos.map((photo, index) => ({ property_id: data.id, public_url: photo.url, storage_path: photo.name, sort_order: index })));
         await supabase.from("floorplans").delete().eq("property_id", data.id);
-        if (floorplan) await supabase.from("floorplans").insert({ property_id: data.id, public_url: floorplan.url, storage_path: floorplan.name });
+        if (floorplan?.url) await supabase.from("floorplans").insert({ property_id: data.id, public_url: floorplan.url, storage_path: floorplan.name });
         await supabase.from("property_videos").delete().eq("property_id", data.id);
         if (videoTour || videoUrl.trim()) {
           await supabase.from("property_videos").insert({
@@ -487,7 +542,7 @@ export function PropertyOnboarding() {
             storage_path: videoTour?.name || null,
             external_url: videoUrl.trim() || null,
             provider: videoUrl.trim() ? videoProviderName(videoUrl) : "Uploaded video",
-            thumbnail_url: photos[0]?.url || null
+            thumbnail_url: successfulPhotos[0]?.url || null
           });
         }
         localStorage.removeItem(`${DRAFT_KEY}.${landlordId}`);
@@ -555,13 +610,17 @@ export function PropertyOnboarding() {
                 )}
               </label>
               {postcodeData && <p className="badge">Valid postcode: {postcodeData.admin_district || postcodeData.region || postcodeData.country}</p>}
-              <label className={missing.has("address") ? "required-missing" : ""}>Address line 1 *
-                <input value={addressLine1} onChange={(event) => setAddressLine1(event.target.value)} placeholder="Flat and building number" />
-                {missing.has("address") && <small>Enter the exact property address here.</small>}
+              <label className={missing.has("buildingNumber") ? "required-missing" : ""}>Building number *
+                <input value={addressLine1} onChange={(event) => setAddressLine1(event.target.value)} placeholder="36" />
+                {missing.has("buildingNumber") && <small>Enter the building number for verification.</small>}
               </label>
-              <label>Address line 2 (optional)<input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} placeholder="Street or building name" /></label>
+              <label className={missing.has("streetName") ? "required-missing" : ""}>Street name *
+                <input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} placeholder="Park Street" />
+                {missing.has("streetName") && <small>Street name is required for address verification.</small>}
+              </label>
+              <label>Building name (optional)<input value={buildingName} onChange={(event) => setBuildingName(event.target.value)} placeholder="Meadows House" /><small>If your building has a name, specify it here.</small></label>
               <label className={missing.has("town") ? "required-missing" : ""}>Town or borough *<input value={town} onChange={(event) => setTown(event.target.value)} />{missing.has("town") && <small>Town or borough is required for listing display and valuation guidance.</small>}</label>
-              <p className="form-hint"><ShieldCheck size={14} /> Your exact address will not be publicly displayed. Only relevant location information is shown to prospective tenants.</p>
+              <p className="form-hint"><ShieldCheck size={14} /> Your exact address is never shown publicly.</p>
             </div>
           )}
 
@@ -595,11 +654,18 @@ export function PropertyOnboarding() {
               <p className="form-note">* Required field</p>
               <div className="form-grid two">
                 <div className={missing.has("bedrooms") ? "required-missing" : ""}>
-                  <SelectField label="Bedrooms *" value={details.bedrooms} onChange={(value) => setDetails({ ...details, bedrooms: value })} options={[{ value: "", label: "Select bedrooms" }, ...["Studio", "1", "2", "3", "4", "5", "5+"].map((item) => ({ value: item, label: item }))]} />
+                  <SelectField label="Bedrooms *" value={details.bedrooms} onChange={(value) => setDetails({ ...details, bedrooms: value })} options={[{ value: "", label: "Select bedrooms" }, ...bedroomOptions.map((item) => ({ value: item, label: item === "0" ? "0 (Studio)" : item }))]} />
                   {missing.has("bedrooms") && <small>Select the number of bedrooms.</small>}
                 </div>
-                <label className={missing.has("bathrooms") ? "required-missing" : ""}>Bathrooms *<input type="number" min="1" placeholder="e.g. 1" value={details.bathrooms} onChange={(event) => setDetails({ ...details, bathrooms: event.target.value })} />{missing.has("bathrooms") && <small>Bathroom count is required for valuation and listing quality.</small>}</label>
-                <label className={missing.has("receptions") ? "required-missing" : ""}>Reception Rooms *<input type="number" min="0" placeholder="e.g. 1" value={details.receptions} onChange={(event) => setDetails({ ...details, receptions: event.target.value })} />{missing.has("receptions") && <small>Enter the number of reception rooms (0 if none).</small>}</label>
+                <div className={missing.has("bathrooms") ? "required-missing" : ""}>
+                  <SelectField label="Bathrooms *" value={details.bathrooms} onChange={(value) => setDetails({ ...details, bathrooms: value })} options={[{ value: "", label: "Select bathrooms" }, ...bathroomOptions.map((item) => ({ value: item, label: item === "5+" ? "5+" : item }))]} />
+                  {missing.has("bathrooms") && <small>Select the number of bathrooms. Half values include a WC.</small>}
+                </div>
+                <div className={missing.has("receptions") || missing.has("receptionsBedroomRule") ? "required-missing" : ""}>
+                  <SelectField label="Living rooms *" value={details.receptions} onChange={(value) => setDetails({ ...details, receptions: value })} options={[{ value: "", label: "Select living rooms" }, ...receptionOptions.map((item) => ({ value: item, label: item }))]} />
+                  {missing.has("receptions") && <small>Select the number of living rooms.</small>}
+                  {missing.has("receptionsBedroomRule") && <small>Properties with one or more bedrooms require at least one living room.</small>}
+                </div>
               </div>
             </div>
           )}
@@ -638,8 +704,19 @@ export function PropertyOnboarding() {
                 <label className="checkbox-row"><input type="checkbox" checked={noGas} onChange={(event) => setNoGas(event.target.checked)} /> <span>I confirm there is no gas supply at this property.</span></label>
                 <div className="form-grid two">
                   {!noGas && <label>Gas Safety Certificate (optional)<input type="file" /></label>}
-                  <label>EPC (optional)<input type="file" /></label>
                   <label>EICR (optional)<input type="file" /></label>
+                </div>
+                <div className={`form-grid ${missing.has("epc") || missing.has("epcExempt") ? "required-missing" : ""}`}>
+                  <h3>EPC</h3>
+                  <p className="muted">Upload the EPC certificate or select the rating only.</p>
+                  <label>Upload EPC certificate<input type="file" accept="image/*,.pdf" onChange={(event) => event.target.files && addEpcCertificate(event.target.files)} /></label>
+                  {epcCertificate && <article className={`photo-preview single-media-preview ${epcCertificate.error ? "has-error" : ""}`}>{epcCertificate.url ? <a className="btn secondary" href={epcCertificate.url} target="_blank" rel="noopener noreferrer">View EPC</a> : <div className="photo-uploading">{epcCertificate.error ? "Upload failed" : "Uploading..."}</div>}<b>{epcCertificate.name}</b>{epcCertificate.progress < 100 && !epcCertificate.error && <div className="upload-progress"><span style={{ width: `${epcCertificate.progress}%` }} /></div>}<button className="btn" type="button" onClick={() => setEpcCertificate(null)}>Remove EPC</button></article>}
+                  <SelectField label="EPC rating" value={epcRating} onChange={(value) => { setEpcRating(value); if (value !== "F" && value !== "G") setEpcExempt(false); }} options={[{ value: "", label: "Select EPC rating" }, ...epcRatings.map((item) => ({ value: item, label: item }))]} />
+                  {missing.has("epc") && <small>Upload an EPC certificate or select an EPC rating.</small>}
+                  {epcNeedsExemption && <p className="notice error">Properties with an EPC rating below E generally cannot be let unless an exemption applies.</p>}
+                  {epcNeedsExemption && <label className="checkbox-row"><input type="checkbox" checked={epcExempt} onChange={(event) => setEpcExempt(event.target.checked)} /> <span>I declare that this property has a valid EPC exemption.</span></label>}
+                  {missing.has("epcExempt") && <small>An EPC exemption declaration is required for F or G ratings.</small>}
+                  {epcError && <p className="notice error">{epcError}</p>}
                 </div>
               </section>
             </div>
@@ -701,8 +778,33 @@ export function PropertyOnboarding() {
 function estimateRent(details: { bedrooms: string; bathrooms: string; propertyType: string; outsideSpace: string; parking: string }, address: PostcodeLookup | null) {
   const baseByCity: Record<string, number> = { London: 1800, Manchester: 1050, Birmingham: 950, Liverpool: 850, Leeds: 900, Edinburgh: 1150, Glasgow: 950, Cardiff: 900, Belfast: 825 };
   const cityBase = baseByCity[address?.admin_district || "London"] || 1000;
-  const bedrooms = details.bedrooms === "Studio" ? 0 : details.bedrooms === "5+" ? 5 : Number(details.bedrooms || 1);
+  const bedrooms = bedroomCount(details.bedrooms || "1");
   const typeBoost = details.propertyType.includes("Detached") ? 650 : details.propertyType === "Penthouse" ? 900 : details.propertyType.includes("House") ? 420 : details.propertyType === "Maisonette" ? 240 : 0;
-  const amenityBoost = (Number(details.bathrooms || 1) - 1) * 180 + (details.outsideSpace === "Yes" ? 180 : 0) + (details.parking === "No Parking" ? 0 : 160);
+  const amenityBoost = (bathroomCount(details.bathrooms || "1") - 1) * 180 + (details.outsideSpace === "Yes" ? 180 : 0) + (details.parking === "No Parking" ? 0 : 160);
   return Math.round((cityBase + bedrooms * 430 + typeBoost + amenityBoost) / 25) * 25;
+}
+
+function bedroomCount(value: string) {
+  if (value === "Studio" || value === "0") return 0;
+  if (value === "5+") return 5;
+  return Number(value || 0);
+}
+
+function bathroomCount(value: string) {
+  if (value === "5+") return 5;
+  return Number(value || 0);
+}
+
+function countValue(value: string) {
+  if (value === "5+") return 5;
+  return Number(value || 0);
+}
+
+function compliancePayload(epcRating: string, epcExempt: boolean, epcCertificate: UploadedPhoto | null) {
+  return {
+    epcRating: epcRating || null,
+    epcExempt,
+    epcCertificateUrl: epcCertificate?.url || null,
+    epcCertificateName: epcCertificate?.name || null
+  };
 }

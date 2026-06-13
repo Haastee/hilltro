@@ -159,7 +159,14 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
   }
 
   if (!property) return <main className="page"><section className="hero"><h1>Property not found.</h1><Link className="btn light" to="/search">Back to search</Link></section></main>;
-  const landlord = landlordById(property.landlordId);
+  const landlord = property.landlordFirstName
+    ? {
+      id: property.landlordId || "",
+      firstName: property.landlordFirstName,
+      profilePhotoUrl: property.landlordAvatarUrl,
+      landlordType: property.landlordType || "Private Landlord"
+    }
+    : landlordById(property.landlordId);
 
   return (
     <main className="page">
@@ -212,6 +219,16 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
           </form>
         </aside>
       </section>
+      {(property.epcCertificateUrl || property.epcRating) && (
+        <section className="card epc-public-panel">
+          <div>
+            <p className="eyebrow">Energy performance</p>
+            <h2>EPC {property.epcRating ? `rating ${property.epcRating}` : "certificate"}</h2>
+            {property.epcExempt && <p className="notice">The landlord has declared a valid EPC exemption for this property.</p>}
+          </div>
+          {property.epcCertificateUrl && <a className="btn secondary" href={property.epcCertificateUrl} target="_blank" rel="noopener noreferrer" download>View EPC</a>}
+        </section>
+      )}
       {saveToast && <div className="save-toast" role="status"><Star size={16} fill="currentColor" /> {saveToast}</div>}
       {offerOpen && <OfferFlow property={property} offer={offer} setOffer={setOffer} step={offerStep} setStep={setOfferStep} onSubmit={submitOffer} onClose={() => setOfferOpen(false)} />}
 

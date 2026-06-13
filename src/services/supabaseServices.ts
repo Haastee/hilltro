@@ -1,8 +1,8 @@
 import { supabase, hasSupabaseConfig } from "../utils/supabase";
 import type { Conversation, Property, ReferencingStep, TenantPassport, User } from "../types/domain";
 import type { AuthService, MessageService, PhotographerService, PropertyService, RegisterResult, SearchFilters } from "./contracts";
-import { assetUrl } from "../utils/asset";
 import { displayName, splitDisplayName } from "../utils/name";
+import { propertyImagesComingSoon } from "../utils/propertyAssets";
 import { storageService } from "./storageService";
 
 const CONTACT_BLOCKER = /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})|(\+?\d[\d\s().-]{7,}\d)|(https?:\/\/|www\.)|(@[a-z0-9_]{3,})|(whatsapp|telegram|instagram|facebook|tiktok)/i;
@@ -270,13 +270,19 @@ function mapProperty(row: any, maxPrice?: number): Property {
     postcode: row.postcode,
     type: row.property_type,
     bedrooms: row.bedrooms,
-    bathrooms: row.bathrooms,
+    bathrooms: Number(row.bathrooms || 0),
     rentPcm: row.rent_pcm || 0,
     availableFrom: row.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     furnishingStatus: row.furnishing || "Flexible",
     description: row.description || "",
     features: row.features || row.outside_space || [],
-    imageUrl: photos[0]?.public_url || assetUrl("assets/properties/london-apartment-photo.png"),
+    floorLevel: row.floor_level || undefined,
+    hasLift: row.has_lift ?? undefined,
+    epcRating: row.compliance?.epcRating || undefined,
+    epcExempt: row.compliance?.epcExempt || undefined,
+    epcCertificateUrl: row.compliance?.epcCertificateUrl || undefined,
+    epcCertificateName: row.compliance?.epcCertificateName || undefined,
+    imageUrl: photos[0]?.public_url || propertyImagesComingSoon,
     imageUrls: photos.map((photo) => photo.public_url).filter(Boolean),
     floorplanUrl: floorplan?.public_url,
     videoUrl: video?.external_url || video?.public_url,
@@ -286,6 +292,7 @@ function mapProperty(row: any, maxPrice?: number): Property {
     longitude: row.longitude ?? undefined,
     status: row.status === "live" ? "LIVE" : row.status === "inactive" ? "LET" : "DRAFT",
     verifiedEnquiriesOnly: true,
+    landlordId: row.landlord_id,
     slightlyAboveBudget: Boolean(maxPrice && row.rent_pcm > maxPrice && row.rent_pcm <= Math.round(maxPrice * 1.15))
   };
 }
@@ -315,7 +322,7 @@ function mapPublicProperty(
     postcode: row.postcode_district,
     type: row.property_type,
     bedrooms: row.bedrooms,
-    bathrooms: row.bathrooms,
+    bathrooms: Number(row.bathrooms || 0),
     rentPcm: rent,
     availableFrom: row.available_from || row.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
     furnishingStatus: row.furnishing || "Flexible",
@@ -323,7 +330,11 @@ function mapPublicProperty(
     features: row.outside_space || [],
     floorLevel: row.floor_level || undefined,
     hasLift: row.has_lift ?? undefined,
-    imageUrl: cover || assetUrl("assets/properties/london-apartment-photo.png"),
+    epcRating: row.epc_rating || row.compliance?.epcRating || undefined,
+    epcExempt: row.epc_exempt ?? row.compliance?.epcExempt ?? undefined,
+    epcCertificateUrl: row.epc_certificate_url || row.compliance?.epcCertificateUrl || undefined,
+    epcCertificateName: row.epc_certificate_name || row.compliance?.epcCertificateName || undefined,
+    imageUrl: cover || propertyImagesComingSoon,
     imageUrls: images.length ? images : cover ? [cover] : [],
     floorplanUrl: floorplan?.public_url,
     videoUrl: video?.external_url || video?.public_url,
@@ -333,6 +344,10 @@ function mapPublicProperty(
     longitude: row.longitude ?? undefined,
     status: "LIVE",
     verifiedEnquiriesOnly: true,
+    landlordId: row.landlord_id,
+    landlordFirstName: row.landlord_first_name || undefined,
+    landlordAvatarUrl: row.landlord_profile_image_url || undefined,
+    landlordType: row.landlord_type || "Private Landlord",
     slightlyAboveBudget: Boolean(maxPrice && rent > maxPrice && rent <= Math.round(maxPrice * 1.15))
   };
 }

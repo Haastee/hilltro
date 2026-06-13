@@ -10,7 +10,14 @@ import { propertyGallery } from "../../utils/propertyMedia";
 
 export function PropertyCard({ property }: { property: Property }) {
   const navigate = useNavigate();
-  const landlord = landlordById(property.landlordId);
+  const landlord = property.landlordFirstName
+    ? {
+      id: property.landlordId || "",
+      firstName: property.landlordFirstName,
+      profilePhotoUrl: property.landlordAvatarUrl,
+      landlordType: property.landlordType || "Private Landlord"
+    }
+    : landlordById(property.landlordId);
   const gallery = propertyGallery(property);
   const imageItems = gallery.filter((item) => item.kind !== "video");
   const [activeIndex, setActiveIndex] = useState(0);

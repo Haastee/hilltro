@@ -1,5 +1,5 @@
 import type { Property } from "../types/domain";
-import { assetUrl } from "./asset";
+import { propertyImagesComingSoon } from "./propertyAssets";
 
 export type GalleryItem = {
   id: string;
@@ -10,26 +10,9 @@ export type GalleryItem = {
   provider?: string;
 };
 
-const fallbackImages = [
-  assetUrl("assets/properties/kensington-apartment.png"),
-  assetUrl("assets/properties/chelsea-studio.png"),
-  assetUrl("assets/properties/south-kensington-maisonette.png"),
-  assetUrl("assets/properties/notting-hill-apartment.png"),
-  assetUrl("assets/properties/mayfair-apartment.png"),
-  assetUrl("assets/properties/belgravia-maisonette.png")
-];
-
-const fallbackFloorplan = assetUrl("assets/floorplans/hilltro-floorplan.svg");
-
 export function propertyGallery(property: Property): GalleryItem[] {
   const sourceImages = unique([property.imageUrl, ...(property.imageUrls || [])]).filter(Boolean);
-  const seed = hash(property.id);
-  const images = [...sourceImages];
-  let offset = 0;
-  while (images.length < 4) {
-    images.push(fallbackImages[(seed + offset) % fallbackImages.length]);
-    offset += 1;
-  }
+  const images = sourceImages.length ? [...sourceImages] : [propertyImagesComingSoon];
   const gallery: GalleryItem[] = images.slice(0, Math.max(4, images.length)).map((url, index) => ({
     id: `${property.id}-image-${index}`,
     kind: "image",
@@ -37,13 +20,15 @@ export function propertyGallery(property: Property): GalleryItem[] {
     thumbnailUrl: url,
     title: index === 0 ? "Main property image" : index === 1 ? "Bedroom image" : index === 2 ? "Kitchen, bathroom or exterior image" : `Property image ${index + 1}`
   }));
-  gallery.push({
-    id: `${property.id}-floorplan`,
-    kind: "floorplan",
-    url: property.floorplanUrl || fallbackFloorplan,
-    thumbnailUrl: property.floorplanUrl || fallbackFloorplan,
-    title: "Floorplan"
-  });
+  if (property.floorplanUrl) {
+    gallery.push({
+      id: `${property.id}-floorplan`,
+      kind: "floorplan",
+      url: property.floorplanUrl,
+      thumbnailUrl: property.floorplanUrl,
+      title: "Floorplan"
+    });
+  }
   if (property.videoUrl) {
     gallery.push({
       id: `${property.id}-video`,
@@ -97,8 +82,4 @@ export function isSupportedVideoUrl(url: string) {
 
 function unique(values: string[]) {
   return [...new Set(values)];
-}
-
-function hash(value: string) {
-  return [...value].reduce((total, character) => total + character.charCodeAt(0), 0);
 }

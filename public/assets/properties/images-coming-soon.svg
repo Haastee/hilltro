@@ -1,0 +1,13 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Images coming soon</title>
+  <desc id="desc">A Hilltro branded placeholder for listings without uploaded property photos.</desc>
+  <rect width="1200" height="800" fill="#F6F3EF"/>
+  <rect x="54" y="54" width="1092" height="692" rx="28" fill="#FFFDF9" stroke="#D8D0C7" stroke-width="2"/>
+  <path d="M154 632L374 408C396 385 433 385 455 408L551 506C571 526 604 527 625 508L693 446C716 425 752 427 772 451L1046 632" stroke="#C77E4B" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="851" cy="242" r="62" fill="#E8D8C9" stroke="#C77E4B" stroke-width="18"/>
+  <rect x="260" y="180" width="680" height="292" rx="26" fill="#F6F3EF" stroke="#D8D0C7" stroke-width="2"/>
+  <text x="600" y="307" text-anchor="middle" fill="#2E3A40" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="700">Images coming soon</text>
+  <path d="M383 360H817" stroke="#7D7066" stroke-width="14" stroke-linecap="round"/>
+  <path d="M437 410H763" stroke="#B8ADA3" stroke-width="12" stroke-linecap="round"/>
+  <text x="600" y="706" text-anchor="middle" fill="#7D7066" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="600">Hilltro verified listing</text>
+</svg>
