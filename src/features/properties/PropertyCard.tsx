@@ -72,7 +72,7 @@ export function PropertyCard({ property }: { property: Property }) {
         }}
       >
         <Link className="property-image-link" to={`/properties/${property.id}`} onClick={() => trackPropertyEngagement(property.id, "property_view", { source: "property_card_image" })}>
-          <img src={active.url} alt={active.title} />
+          <img src={active.url} alt={active.title} loading="lazy" decoding="async" />
           {active.kind === "floorplan" && <span className="media-label">Floorplan</span>}
         </Link>
         {imageItems.length > 1 && (

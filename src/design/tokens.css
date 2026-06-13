@@ -490,6 +490,25 @@ body {
 .ll-signature { font-family: "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive; font-size: 25px; color: var(--color-bluegrey); }
 .ll-contract-status { display: inline-flex; align-items: center; gap: 6px; color: var(--color-success); font-size: 12px; font-weight: 600; }
 
+/* Tenant dashboard hero cards — reuse the shared .ll-card styling for an exact
+   design match with the landlord dashboard, stacked + lightly staggered. */
+.tenant-dashboard-visual .ll-card { position: static; width: auto; padding: 16px 18px; display: grid; gap: 12px; animation: none; transition: transform .22s ease, box-shadow .22s ease; }
+.tenant-dashboard-visual .tn-dash-card:nth-child(odd) { transform: translateX(-14px) rotate(-1.1deg); }
+.tenant-dashboard-visual .tn-dash-card:nth-child(even) { transform: translateX(18px) rotate(1.2deg); }
+.tenant-dashboard-visual .tn-dash-card:nth-child(2) { box-shadow: 0 32px 72px rgba(16,24,32,.17); z-index: 2; }
+.tenant-dashboard-visual .tn-dash-card:hover { transform: translateX(0) rotate(0); box-shadow: 0 30px 66px rgba(16,24,32,.18); }
+.tn-fields { display: grid; gap: 8px; }
+.tn-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--color-line); border-radius: 10px; font-size: 13px; font-weight: 600; }
+.tn-field svg { color: var(--color-success); flex: none; }
+.tn-progress { height: 8px; border-radius: 999px; background: var(--color-brand-soft); overflow: hidden; }
+.tn-progress span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #157f4f, #7bbf6a); }
+.tn-flow-row { display: flex; align-items: center; gap: 12px; }
+.tn-flow-row > div { display: grid; gap: 1px; margin-right: auto; min-width: 0; }
+.tn-flow-row b { font-size: 14px; }
+.tn-flow-row small { color: var(--color-muted); font-size: 12px; }
+.tn-flow-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--color-brand-soft); color: var(--color-brand); }
+.tn-flow-icon.contract { background: rgba(21,127,79,.10); color: var(--color-success); }
+
 /* ---- Landlord dashboard hero ---- */
 .landlord-dashboard-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr); gap: clamp(28px, 4vw, 56px); align-items: center; text-align: left; }
 .dashboard-hero-copy { display: grid; gap: 18px; justify-items: start; }
@@ -549,6 +568,7 @@ body {
   .landlord-actions { grid-template-columns: 1fr; max-width: none; }
   .landlord-composition { min-height: 0; display: grid; gap: 14px; }
   .ll-card { position: static; width: auto; animation-delay: 0s; }
+  .tenant-dashboard-visual .tn-dash-card { transform: none; }
   .ll-applicant { box-shadow: 0 20px 52px rgba(16,24,32,.12); }
   .ll-journey { max-width: none; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
   .ll-journey::-webkit-scrollbar { display: none; }

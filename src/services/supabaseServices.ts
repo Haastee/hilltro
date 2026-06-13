@@ -55,6 +55,22 @@ export class SupabaseAuthService implements AuthService {
   async register(input: { firstName: string; middleName?: string; lastName: string; email: string; password: string; phone: string; role: User["role"]; profileImage?: File | null }): Promise<RegisterResult> {
     if (!input.email?.trim() || !input.password) throw new Error("Enter your email and password to create an account.");
     const name = displayName(input);
+    // Upload the optional profile photo *before* sign-up. Storage accepts the
+    // anon key without a session, so this works even when email confirmation is
+    // on. We pass the resulting URL through the sign-up metadata so the profiles
+    // row (created by the handle_new_user_profile trigger) carries the photo —
+    // otherwise a photo chosen at registration would be lost across the email
+    // confirmation gap, where no authenticated write is possible yet.
+    let profileImageUrl: string | null = null;
+    if (input.profileImage) {
+      try {
+        profileImageUrl = (await storageService.uploadProfileImage(crypto.randomUUID(), input.profileImage)).url;
+      } catch {
+        // A failed photo upload must never block account creation; the user can
+        // add a photo later from My Profile.
+        profileImageUrl = null;
+      }
+    }
     const { data, error } = await supabase.auth.signUp({
       email: input.email,
       password: input.password,
@@ -65,7 +81,8 @@ export class SupabaseAuthService implements AuthService {
           middle_name: input.middleName || null,
           last_name: input.lastName,
           phone: input.phone,
-          role: input.role.toLowerCase()
+          role: input.role.toLowerCase(),
+          profile_image_url: profileImageUrl
         }
       }
     });
@@ -75,10 +92,10 @@ export class SupabaseAuthService implements AuthService {
     // link we just emailed before any authenticated write (profile, photo,
     // property) will succeed under RLS. Do NOT sign them in here — surface the
     // "confirm your email" state so the app never pretends to be authenticated.
+    // The trigger has already written the profile (incl. photo) from metadata.
     if (!data.session) {
       return { status: "confirm", email: input.email.toLowerCase() };
     }
-    const profileImageUrl = input.profileImage ? (await storageService.uploadProfileImage(data.user.id, input.profileImage)).url : null;
     const profile = {
       id: data.user.id,
       email: input.email.toLowerCase(),
