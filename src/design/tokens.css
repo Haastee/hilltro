@@ -275,6 +275,16 @@ textarea { min-height: 120px; padding: 14px; resize: vertical; }
 .required-missing input, .required-missing select, .required-missing textarea, .dropzone.required-missing { border-color: var(--color-error); box-shadow: 0 0 0 4px rgba(194,65,53,.12); }
 .required-missing small { color: var(--color-error); font-weight: 600; line-height: 1.4; }
 .compliance-box { border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 18px; background: #fafcfc; display: grid; gap: 12px; }
+.compliance-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.compliance-upload-grid label, .epc-fieldset { min-width: 0; }
+.compliance-upload-grid .is-disabled { opacity: .68; }
+.epc-fieldset { display: grid; gap: 12px; border-top: 1px solid var(--color-line); padding-top: 14px; }
+.stable-checkbox { min-height: 44px; align-items: center; }
+.listing-preview-panel { display: grid; gap: 18px; }
+.listing-preview-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.listing-preview-summary div { min-width: 0; border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 14px; background: #fafcfc; }
+.listing-preview-summary b { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.preview-badges { flex-wrap: wrap; justify-content: flex-start; }
 .onboarding-panel { min-height: 560px; }
 .choice-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .choice { min-height: 42px; border: 1px solid var(--color-line); border-radius: 999px; padding: 0 14px; background: white; color: var(--color-bluegrey); cursor: pointer; font-weight: 600; }
@@ -286,7 +296,7 @@ textarea { min-height: 120px; padding: 14px; resize: vertical; }
 .rent-input-group { display: flex; gap: 10px; align-items: stretch; }
 .rent-input-group input { flex: 1 1 auto; min-width: 0; }
 .rent-estimate-btn { flex: 0 0 auto; white-space: nowrap; }
-@media (max-width: 640px) { .rent-input-group { flex-direction: column; } .rent-estimate-btn { width: 100%; } }
+@media (max-width: 640px) { .rent-input-group { flex-direction: column; } .rent-estimate-btn { width: 100%; } .compliance-upload-grid, .listing-preview-summary { grid-template-columns: 1fr; } .offer-review-summary { grid-template-columns: 1fr; } }
 .valuation-card h2 { margin: 0; font-size: clamp(2rem, 4vw, 4rem); letter-spacing: -.04em; }
 .auth-page { min-height: calc(100vh - 78px); display: grid; align-items: center; }
 .auth-shell { max-width: 1120px; width: 100%; margin: 0 auto; display: grid; grid-template-columns: 1fr 460px; gap: 22px; align-items: center; }
@@ -947,9 +957,13 @@ input[type="file"]::file-selector-button:hover { border-color: var(--color-orang
 .offer-flow-card label { color: var(--color-muted); font-weight: 600; }
 .offer-flow-card input:not([type="checkbox"]), .offer-flow-card textarea { width: 100%; min-height: 60px; border-radius: 14px; font-size: 17px; }
 .offer-flow-card textarea { min-height: 140px; }
-.checkbox-row { display: flex; align-items: flex-start; gap: 12px; color: var(--color-bluegrey); line-height: 1.55; }
-.checkbox-row input { flex: 0 0 auto; margin-top: 2px; }
+.checkbox-row { display: flex; align-items: flex-start; gap: 12px; color: var(--color-bluegrey); line-height: 1.55; max-width: 100%; }
+.checkbox-row input { flex: 0 0 auto; width: 18px; min-width: 18px; height: 18px; margin-top: 3px; }
+.checkbox-row span { min-width: 0; overflow-wrap: anywhere; }
 .checkbox-row a { color: var(--color-orange-ink); font-weight: 600; }
+.property-deposit { margin: 0; color: var(--color-muted); font-weight: 700; }
+.offer-review-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 14px; background: #fafcfc; }
+.offer-review-summary b { overflow-wrap: anywhere; }
 
 .feature-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .feature-choice { min-height: 52px; border: 1px solid var(--color-line); border-radius: 14px; padding: 0 14px; background: white; color: var(--color-bluegrey); font-weight: 600; cursor: pointer; transition: .16s ease; }

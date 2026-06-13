@@ -1,5 +1,6 @@
 import { demoProperties, QA_LANDLORD_ID } from "./properties";
 import { assetUrl } from "../utils/asset";
+import { landlordTypeForLiveListings, withStrictLandlordType } from "../utils/landlordClassification";
 import type { ApplicantProfile, LandlordProfile } from "../types/domain";
 
 export type ManagedProperty = {
@@ -14,6 +15,10 @@ export type ManagedProperty = {
   gallery: string[];
   floorplanUrl?: string;
   videoUrl?: string;
+  epcRating?: string;
+  epcExempt?: boolean;
+  epcCertificateUrl?: string;
+  epcCertificateName?: string;
   completion: {
     requiredFieldsComplete: boolean;
     photosUploaded: boolean;
@@ -88,10 +93,19 @@ export const landlordProfiles: LandlordProfile[] = [
     lastName: "Hart",
     displayName: "Olivia Hart",
     bio: "Prime Central London landlord focused on well-presented homes and responsive, structured tenancy management.",
-    landlordType: "Professional Landlord",
-    propertiesCount: demoProperties.filter((property) => property.landlordId === QA_LANDLORD_ID).length
+    landlordType: landlordTypeForLiveListings(liveListingCount(QA_LANDLORD_ID)),
+    propertiesCount: liveListingCount(QA_LANDLORD_ID)
   }
 ];
+
+export function liveListingCount(landlordId = QA_LANDLORD_ID) {
+  return demoProperties.filter((property) => property.landlordId === landlordId && property.status === "LIVE").length;
+}
+
+export function landlordById(id = QA_LANDLORD_ID) {
+  const profile = landlordProfiles.find((landlord) => landlord.id === id) || landlordProfiles[0];
+  return withStrictLandlordType(profile, liveListingCount(profile.id));
+}
 
 export const applicantProfiles: ApplicantProfile[] = [
   { id: "app-taylor", name: "Taylor", referencingStatus: "Verified", affordabilityPcm: 5678, employmentStatus: "Employed, finance", moveDate: "2026-09-05", occupants: "1", pets: "No" },
@@ -243,8 +257,4 @@ export function propertyAddress(propertyId?: string) {
 
 export function applicantById(applicantId?: string) {
   return applicantProfiles.find((applicant) => applicant.id === applicantId);
-}
-
-export function landlordById(landlordId = QA_LANDLORD_ID) {
-  return landlordProfiles.find((landlord) => landlord.id === landlordId) || landlordProfiles[0];
 }

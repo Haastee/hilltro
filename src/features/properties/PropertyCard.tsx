@@ -7,6 +7,8 @@ import { landlordById } from "../../data/landlordProperties";
 import type { Property } from "../../types/domain";
 import { trackPropertyEngagement } from "../../services/engagementService";
 import { propertyGallery } from "../../utils/propertyMedia";
+import { landlordTypeForLiveListings } from "../../utils/landlordClassification";
+import { depositDisplay, formatRentPcm } from "../../utils/propertyPricing";
 
 export function PropertyCard({ property }: { property: Property }) {
   const navigate = useNavigate();
@@ -15,7 +17,7 @@ export function PropertyCard({ property }: { property: Property }) {
       id: property.landlordId || "",
       firstName: property.landlordFirstName,
       profilePhotoUrl: property.landlordAvatarUrl,
-      landlordType: property.landlordType || "Private Landlord"
+      landlordType: landlordTypeForLiveListings(property.landlordLiveListingCount || 0)
     }
     : landlordById(property.landlordId);
   const gallery = propertyGallery(property);
@@ -91,11 +93,12 @@ export function PropertyCard({ property }: { property: Property }) {
       </div>
       <div className="body">
         <div className="property-card-top">
-          <p className="property-price">£{property.rentPcm.toLocaleString("en-GB")} pcm</p>
+          <p className="property-price">{formatRentPcm(property.rentPcm)}</p>
           <span className="property-type-icon"><TypeIcon size={16} /> {property.type}</span>
         </div>
         <h3><Link to={`/properties/${property.id}`} onClick={() => trackPropertyEngagement(property.id, "property_view", { source: "property_card_title" })}>{property.streetName}, {property.area}</Link></h3>
         <p className="muted">{property.city} {property.postcodeDistrict}</p>
+        <p className="property-deposit">{depositDisplay(property.rentPcm, property.type)}</p>
         <p className="property-meta">{property.bedrooms} bed · {property.bathrooms} bath · {property.furnishingStatus}</p>
         <Link className="property-landlord-strip" to={`/landlords/${landlord.id}`}>
           <HilltroAvatar name={publicLandlordName(landlord)} imageUrl={landlord.profilePhotoUrl} size="sm" />

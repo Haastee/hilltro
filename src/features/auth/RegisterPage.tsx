@@ -19,7 +19,6 @@ type RegistrationState = {
   phone: string;
   password: string;
   referencingReady: boolean;
-  incomeReady: boolean;
   terms: boolean;
   profileImage: File | null;
 };
@@ -42,7 +41,6 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
     phone: "",
     password: "",
     referencingReady: false,
-    incomeReady: false,
     terms: false,
     profileImage: null
   });
@@ -205,12 +203,11 @@ export function RegisterPage({ onAuth }: { onAuth: (user: User) => void }) {
     body: (
       <div className="form-grid">
         <p className="form-note">* Required field</p>
-        <label className="checkbox-row"><input checked={values.referencingReady} onChange={(event) => setValues({ ...values, referencingReady: event.target.checked })} type="checkbox" /> <span>I understand Hilltro may ask for identity, income and right-to-rent information. *</span></label>
-        <label className="checkbox-row"><input checked={values.incomeReady} onChange={(event) => setValues({ ...values, incomeReady: event.target.checked })} type="checkbox" /> <span>I am ready to complete referencing before sending serious offers. *</span></label>
+        <label className="checkbox-row"><input checked={values.referencingReady} onChange={(event) => setValues({ ...values, referencingReady: event.target.checked })} type="checkbox" /> <span>I understand Hilltro may ask for identity, income, right-to-rent and offer-readiness information before serious offers can progress. *</span></label>
       </div>
     ),
-    valid: values.referencingReady && values.incomeReady,
-    error: "Confirm both referencing preparation statements before continuing."
+    valid: values.referencingReady,
+    error: "Confirm the referencing consent before continuing."
   };
   const finalSteps = [
     {

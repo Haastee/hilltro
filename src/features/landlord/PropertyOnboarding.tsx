@@ -11,6 +11,7 @@ import { storageService } from "../../services/storageService";
 import { supabase } from "../../utils/supabase";
 import { propertyImagesComingSoon } from "../../utils/propertyAssets";
 import { isSupportedVideoUrl, videoProviderName } from "../../utils/propertyMedia";
+import { depositDisplay, formatRentPcm, isValidMoneyInput } from "../../utils/propertyPricing";
 
 const steps = ["Address", "Property Type", "Rooms", "Features", "Description", "Special Features", "Availability", "Valuation", "Photos", "Floorplan", "Video", "Preview"];
 const propertyTypes = ["Flat", "Penthouse", "House", "Maisonette", "Detached House", "Semi-Detached House", "Terraced House", "Bungalow", "Shared Property"];
@@ -323,8 +324,7 @@ export function PropertyOnboarding() {
     if (targetStep === 0) {
       if (!postcode.trim()) missingFields.add("postcode");
       if (!postcodeData) missingFields.add("postcodeLookup");
-      if (!addressLine1.trim()) missingFields.add("buildingNumber");
-      if (!addressLine2.trim()) missingFields.add("streetName");
+      if (!addressLine1.trim()) missingFields.add("addressLine1");
       if (!town.trim()) missingFields.add("town");
     }
     if (targetStep === 1) {
@@ -345,7 +345,7 @@ export function PropertyOnboarding() {
     }
     if (targetStep === 4 && !details.description.trim()) missingFields.add("description");
     if (targetStep === 6 && !availableFrom) missingFields.add("availableFrom");
-    if (targetStep === 7 && !rent) missingFields.add("rent");
+    if (targetStep === 7 && !isValidMoneyInput(rent)) missingFields.add("rent");
     if (targetStep === 4) {
       if (!epcRating && !epcCertificate?.url) missingFields.add("epc");
       if (epcNeedsExemption && !epcExempt) missingFields.add("epcExempt");
@@ -378,8 +378,8 @@ export function PropertyOnboarding() {
           id: params.get("propertyId") || undefined,
           landlord_id: user.user.id,
           title: `${town || "Draft"} ${details.propertyType}`,
-          address_line_1: addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || "Address pending",
-          address_line_2: buildingName || null,
+          address_line_1: addressLine1 || "Address pending",
+          address_line_2: addressLine2 || null,
           city: town || postcodeData?.admin_district || "Unknown",
           postcode: postcode || "Unknown",
           postcode_district: postcode.trim().split(/\s+/)[0] || "Unknown",
@@ -409,7 +409,7 @@ export function PropertyOnboarding() {
       id: draftId,
       ownerId: landlordId,
       title: `${town || "Draft"} ${details.propertyType}`,
-      address: [addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || addressLine2, buildingName, town, postcode].filter(Boolean).join(", ") || "Address pending",
+      address: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", ") || "Address pending",
       postcode,
       bedrooms: details.bedrooms,
       bathrooms: details.bathrooms,
@@ -467,11 +467,11 @@ export function PropertyOnboarding() {
     const property = {
       id: params.get("propertyId") || `published-${crypto.randomUUID()}`,
       title: `${town || "Verified"} ${details.propertyType}`,
-      streetName: addressLine2 || addressLine1,
+      streetName: addressLine1,
       area: town || postcodeData?.admin_district || "Area",
       city: town || postcodeData?.admin_district || "London",
       postcodeDistrict: postcode.trim().split(/\s+/)[0] || "W8",
-      fullAddress: [addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1 || addressLine2, buildingName, town, postcode].filter(Boolean).join(", "),
+      fullAddress: [addressLine1, addressLine2, town, postcode].filter(Boolean).join(", "),
       postcode,
       type: details.propertyType,
       bedrooms: bedroomCount(details.bedrooms),
@@ -504,8 +504,8 @@ export function PropertyOnboarding() {
         id: params.get("propertyId") || undefined,
         landlord_id: uid,
         title: property.title,
-        address_line_1: addressLine1 && addressLine2 ? `${addressLine1} ${addressLine2}` : addressLine1,
-        address_line_2: buildingName || null,
+        address_line_1: addressLine1,
+        address_line_2: addressLine2 || null,
         city: town || postcodeData?.admin_district || "Unknown",
         postcode,
         postcode_district: property.postcodeDistrict,
@@ -610,16 +610,16 @@ export function PropertyOnboarding() {
                 )}
               </label>
               {postcodeData && <p className="badge">Valid postcode: {postcodeData.admin_district || postcodeData.region || postcodeData.country}</p>}
-              <label className={missing.has("buildingNumber") ? "required-missing" : ""}>Building number *
-                <input value={addressLine1} onChange={(event) => setAddressLine1(event.target.value)} placeholder="36" />
-                {missing.has("buildingNumber") && <small>Enter the building number for verification.</small>}
+              <label className={missing.has("addressLine1") ? "required-missing" : ""}>Address Line 1 *
+                <input value={addressLine1} onChange={(event) => setAddressLine1(event.target.value)} placeholder="Flat 5, 21 Well Road" />
+                <small>Flat number, building number/name, street. Example: Apartment 12, Hill House, Market Street.</small>
+                {missing.has("addressLine1") && <small>Address Line 1 is required for verification.</small>}
               </label>
-              <label className={missing.has("streetName") ? "required-missing" : ""}>Street name *
-                <input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} placeholder="Park Street" />
-                {missing.has("streetName") && <small>Street name is required for address verification.</small>}
+              <label>Address Line 2 (optional)
+                <input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} placeholder="Building name, block or floor" />
+                <small>Additional address information if applicable. Example: Building name, block, floor.</small>
               </label>
-              <label>Building name (optional)<input value={buildingName} onChange={(event) => setBuildingName(event.target.value)} placeholder="Meadows House" /><small>If your building has a name, specify it here.</small></label>
-              <label className={missing.has("town") ? "required-missing" : ""}>Town or borough *<input value={town} onChange={(event) => setTown(event.target.value)} />{missing.has("town") && <small>Town or borough is required for listing display and valuation guidance.</small>}</label>
+              <label className={missing.has("town") ? "required-missing" : ""}>City/town *<input value={town} onChange={(event) => setTown(event.target.value)} />{missing.has("town") && <small>City or town is required for listing display and valuation guidance.</small>}</label>
               <p className="form-hint"><ShieldCheck size={14} /> Your exact address is never shown publicly.</p>
             </div>
           )}
@@ -699,16 +699,20 @@ export function PropertyOnboarding() {
               <label className={missing.has("description") ? "required-missing" : ""}>Property Description *<textarea required value={details.description} onChange={(event) => setDetails({ ...details, description: event.target.value })} />{missing.has("description") && <small>A description helps applicants understand condition, layout and tenancy readiness.</small>}</label>
               <button className="btn" type="button" onClick={writeWithAi}>Write With AI</button>
               <section className="compliance-box">
-                <h3>Compliance documents</h3>
-                <p className="muted">Providing compliance documentation helps ensure a smoother tenancy experience and may reduce delays during move-in.</p>
-                <label className="checkbox-row"><input type="checkbox" checked={noGas} onChange={(event) => setNoGas(event.target.checked)} /> <span>I confirm there is no gas supply at this property.</span></label>
-                <div className="form-grid two">
-                  {!noGas && <label>Gas Safety Certificate (optional)<input type="file" /></label>}
+                <div>
+                  <h3>Compliance documents</h3>
+                  <p className="muted">Providing compliance documentation helps ensure a smoother tenancy experience and may reduce delays during move-in.</p>
+                </div>
+                <label className="checkbox-row stable-checkbox"><input type="checkbox" checked={noGas} onChange={(event) => setNoGas(event.target.checked)} /> <span>I confirm there is no gas supply at this property.</span></label>
+                <div className="compliance-upload-grid">
+                  <label className={noGas ? "is-disabled" : ""}>Gas Safety Certificate (optional)<input type="file" disabled={noGas} />{noGas && <small>No gas supply confirmed.</small>}</label>
                   <label>EICR (optional)<input type="file" /></label>
                 </div>
-                <div className={`form-grid ${missing.has("epc") || missing.has("epcExempt") ? "required-missing" : ""}`}>
-                  <h3>EPC</h3>
-                  <p className="muted">Upload the EPC certificate or select the rating only.</p>
+                <div className={`epc-fieldset ${missing.has("epc") || missing.has("epcExempt") ? "required-missing" : ""}`}>
+                  <div>
+                    <h3>EPC</h3>
+                    <p className="muted">Upload the EPC certificate or select the rating only.</p>
+                  </div>
                   <label>Upload EPC certificate<input type="file" accept="image/*,.pdf" onChange={(event) => event.target.files && addEpcCertificate(event.target.files)} /></label>
                   {epcCertificate && <article className={`photo-preview single-media-preview ${epcCertificate.error ? "has-error" : ""}`}>{epcCertificate.url ? <a className="btn secondary" href={epcCertificate.url} target="_blank" rel="noopener noreferrer">View EPC</a> : <div className="photo-uploading">{epcCertificate.error ? "Upload failed" : "Uploading..."}</div>}<b>{epcCertificate.name}</b>{epcCertificate.progress < 100 && !epcCertificate.error && <div className="upload-progress"><span style={{ width: `${epcCertificate.progress}%` }} /></div>}<button className="btn" type="button" onClick={() => setEpcCertificate(null)}>Remove EPC</button></article>}
                   <SelectField label="EPC rating" value={epcRating} onChange={(value) => { setEpcRating(value); if (value !== "F" && value !== "G") setEpcExempt(false); }} options={[{ value: "", label: "Select EPC rating" }, ...epcRatings.map((item) => ({ value: item, label: item }))]} />
@@ -752,10 +756,10 @@ export function PropertyOnboarding() {
               <div className={`valuation-rent ${missing.has("rent") ? "required-missing" : ""}`}>
                 <label htmlFor="valuation-rent-input">Your monthly rent *</label>
                 <div className="rent-input-group">
-                  <input id="valuation-rent-input" type="number" inputMode="numeric" value={rent} onChange={(event) => setRent(event.target.value)} placeholder={String(recommendedRent)} />
+                <input id="valuation-rent-input" type="number" inputMode="decimal" min="0" step="0.01" value={rent} onChange={(event) => setRent(event.target.value)} placeholder={String(recommendedRent)} />
                   <button type="button" className="btn primary rent-estimate-btn" onClick={() => setRent(String(recommendedRent))}>Use Hilltro estimate</button>
                 </div>
-                {missing.has("rent") && <small>Confirm your asking rent or use the Hilltro recommendation.</small>}
+                {missing.has("rent") && <small>Enter a valid monthly rent with up to two decimal places, or use the Hilltro recommendation.</small>}
               </div>
             </div>
           )}
@@ -763,7 +767,7 @@ export function PropertyOnboarding() {
           {step === 8 && <div className="form-grid"><h2>Photos</h2><div className={`dropzone photo-drop ${dragging ? "dragging" : ""} ${missing.has("photos") ? "required-missing" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()}><div><b>Drag photos here or click to upload</b><p className="muted">Upload at least four images where possible: main image, bedroom, kitchen/bathroom/exterior and another supporting angle.</p>{missing.has("photos") && <small>Upload at least one photo before activation.</small>}</div><input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => event.target.files && addFiles(event.target.files)} /></div><div className="photo-preview-grid">{photos.map((photo, index) => <article className={`photo-preview ${photo.error ? "has-error" : ""}`} key={photo.id}>{photo.url ? <img src={photo.url} alt="" /> : <div className="photo-uploading">{photo.error ? "Upload failed" : "Uploading…"}</div>}<b>{index + 1}. {photo.name}</b>{!photo.error && photo.progress < 100 && <div className="upload-progress"><span style={{ width: `${photo.progress}%` }} /></div>}{photo.error && <small className="photo-error-text">{photo.errorMessage || "Upload failed — use Replace to try again."}</small>}<div className="hero-actions"><button className="btn" onClick={() => reorderPhoto(index, -1)}>Up</button><button className="btn" onClick={() => reorderPhoto(index, 1)}>Down</button><button className="btn" onClick={() => replacePhoto(index)}>Replace</button><button className="btn" onClick={() => setPhotos(photos.filter((item) => item.id !== photo.id))}>Remove</button></div></article>)}</div><Link className="btn" to="/photography">Don't have professional photos? Book Photography with Hilltro</Link></div>}
           {step === 9 && <div className="form-grid"><h2>Upload Floorplan</h2><p className="muted">Optional but encouraged. The floorplan appears as the final gallery image.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFloorplan(event.dataTransfer.files); }} onClick={() => document.getElementById("floorplan-upload")?.click()}><div><b>Drag floorplan here or click to upload</b><p className="muted">Image or PDF accepted. You can replace it later.</p></div><input id="floorplan-upload" type="file" accept="image/*,.pdf" hidden onChange={(event) => event.target.files && addFloorplan(event.target.files)} /></div>{floorplan && <article className="photo-preview single-media-preview"><img src={floorplan.url} alt="" /><b>{floorplan.name}</b><div className="upload-progress"><span style={{ width: `${floorplan.progress}%` }} /></div><button className="btn" type="button" onClick={() => setFloorplan(null)}>Remove floorplan</button></article>}</div>}
           {step === 10 && <div className="form-grid"><h2>Upload Property Video</h2><p className="muted">Properties with video tours typically let faster. Upload a short vertical walkthrough or provide a supported video link.</p><div className="dropzone photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addVideo(event.dataTransfer.files); }} onClick={() => document.getElementById("video-upload")?.click()}><div><b>Drag video here or click to upload</b><p className="muted">Maximum upload size 200MB. YouTube, Vimeo and reputable hosted links are supported.</p></div><input id="video-upload" type="file" accept="video/*" hidden onChange={(event) => event.target.files && addVideo(event.target.files)} /></div><label className={missing.has("videoUrl") ? "required-missing" : ""}>External video link (optional)<input value={videoUrl} onChange={(event) => updateVideoUrl(event.target.value)} placeholder="https://youtu.be/..." />{(videoError || missing.has("videoUrl")) && <small>{videoError || "Use a supported video URL before continuing."}</small>}</label>{videoTour && <article className="photo-preview single-media-preview"><video src={videoTour.url} controls /><b>{videoTour.name}</b><div className="upload-progress"><span style={{ width: `${videoTour.progress}%` }} /></div><button className="btn" type="button" onClick={() => setVideoTour(null)}>Remove video</button></article>}</div>}
-          {step === 11 && <div><h2>Preview listing</h2><p className="muted">Review photos, address privacy, rental price, description and property summary before publishing.</p><p><b>{addressLine1 ? `${addressLine1}, ${town}` : "Address pending"}</b></p><p>£{(rent || recommendedRent).toLocaleString()} pcm · {details.bedrooms} bed · {details.propertyType}{needsFloor && details.floor ? ` · ${details.floor}` : ""}{floorNeedsLift && details.hasLift ? ` · ${details.hasLift === "Yes" ? "Lift" : "No lift"}` : ""}</p>{availableFrom && <p className="muted">Available from {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(availableFrom))}</p>}{floorplan && <p className="badge">Floorplan attached</p>}{(videoUrl || videoTour) && <p className="badge orange">Video tour attached</p>}{specialFeatures.length > 0 && <div className="feature-pill-grid compact">{specialFeatures.map((feature) => <span className="feature-pill" key={feature}>{feature}</span>)}</div>}{photos.filter((photo) => photo.url).length > 0 ? <div className="photo-preview-grid preview-photo-grid">{photos.filter((photo) => photo.url).map((photo) => <article className="photo-preview" key={photo.id}><img src={photo.url} alt="" /></article>)}</div> : <p className="notice error">No photos added yet — go back to the Photos step and add at least one.</p>}{publishError && <p className="notice error">{publishError}</p>}<button className="btn primary" disabled={publishing} onClick={publishListing}>{publishing ? "Publishing…" : "Publish Listing"}</button></div>}
+          {step === 11 && <div className="listing-preview-panel"><div><h2>Preview listing</h2><p className="muted">Review photos, address privacy, rental price, description and property summary before publishing.</p></div><section className="listing-preview-summary"><div><span className="label">Display address</span><b>{[addressLine1, town].filter(Boolean).join(", ") || "Address pending"}</b></div><div><span className="label">Monthly rent</span><b>{formatRentPcm(Number(rent || recommendedRent))}</b></div><div><span className="label">Deposit</span><b>{depositDisplay(Number(rent || recommendedRent), details.propertyType).replace("Deposit: ", "")}</b></div><div><span className="label">Property</span><b>{details.bedrooms} bed · {details.propertyType}{needsFloor && details.floor ? ` · ${details.floor}` : ""}{floorNeedsLift && details.hasLift ? ` · ${details.hasLift === "Yes" ? "Lift" : "No lift"}` : ""}</b></div>{availableFrom && <div><span className="label">Available</span><b>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(availableFrom))}</b></div>}</section><div className="hero-actions preview-badges">{floorplan && <p className="badge">Floorplan attached</p>}{(videoUrl || videoTour) && <p className="badge orange">Video tour attached</p>}{epcCertificate?.url ? <p className="badge">EPC document attached</p> : epcRating && <p className="badge">EPC {epcRating}</p>}</div>{specialFeatures.length > 0 && <div className="feature-pill-grid compact">{specialFeatures.map((feature) => <span className="feature-pill" key={feature}>{feature}</span>)}</div>}{photos.filter((photo) => photo.url).length > 0 ? <div className="photo-preview-grid preview-photo-grid">{photos.filter((photo) => photo.url).map((photo) => <article className="photo-preview" key={photo.id}><img src={photo.url} alt="" /></article>)}</div> : <p className="notice error">No photos added yet — go back to the Photos step and add at least one.</p>}{publishError && <p className="notice error">{publishError}</p>}<button className="btn primary" disabled={publishing} onClick={publishListing}>{publishing ? "Publishing..." : "Publish Listing"}</button></div>}
           <div className="hero-actions" style={{ marginTop: 24 }}>
             <button className="btn" disabled={step === 0} onClick={() => { setMissing(new Set()); setStep(step - 1); }}>Back</button>
             {step < steps.length - 1 && <button className="btn primary" onClick={continueFlow}>Continue</button>}

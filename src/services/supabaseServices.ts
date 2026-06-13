@@ -4,6 +4,7 @@ import type { AuthService, MessageService, PhotographerService, PropertyService,
 import { displayName, splitDisplayName } from "../utils/name";
 import { propertyImagesComingSoon } from "../utils/propertyAssets";
 import { storageService } from "./storageService";
+import { landlordTypeForLiveListings } from "../utils/landlordClassification";
 
 const CONTACT_BLOCKER = /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})|(\+?\d[\d\s().-]{7,}\d)|(https?:\/\/|www\.)|(@[a-z0-9_]{3,})|(whatsapp|telegram|instagram|facebook|tiktok)/i;
 const DEMO_LANDLORD_SESSION_KEY = "hilltro.demo.landlord.session";
@@ -347,7 +348,8 @@ function mapPublicProperty(
     landlordId: row.landlord_id,
     landlordFirstName: row.landlord_first_name || undefined,
     landlordAvatarUrl: row.landlord_profile_image_url || undefined,
-    landlordType: row.landlord_type || "Private Landlord",
+    landlordType: landlordTypeForLiveListings(Number(row.landlord_live_listing_count || 0)),
+    landlordLiveListingCount: Number(row.landlord_live_listing_count || 0),
     slightlyAboveBudget: Boolean(maxPrice && rent > maxPrice && rent <= Math.round(maxPrice * 1.15))
   };
 }

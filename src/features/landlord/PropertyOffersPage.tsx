@@ -5,6 +5,7 @@ import { HilltroAvatar } from "../../components/HilltroAvatar";
 import { applicantOffers, interestEvents, managedProperties, type ApplicantOffer } from "../../data/landlordProperties";
 import { propertyService } from "../../app/services";
 import { acceptOfferToDeal, fetchPropertyOffers, isRealId } from "../../services/landlordService";
+import { depositDisplay, formatRentPcm } from "../../utils/propertyPricing";
 
 type Deal = { applicant: string; rent: number; moveDate: string; status: string; referencing: string; nextSteps: string };
 type OfferHeader = { imageUrl: string; address: string; rentPcm: number; type: string; bedrooms: number };
@@ -94,7 +95,7 @@ export function PropertyOffersPage() {
         <div>
           <span className="status-pill live">Live</span>
           <h1>{property.address}</h1>
-          <p className="muted">£{property.rentPcm.toLocaleString("en-GB")} pcm · {property.type} · {property.bedrooms} bed</p>
+          <p className="muted">{formatRentPcm(property.rentPcm)} · {depositDisplay(property.rentPcm, property.type)} · {property.type} · {property.bedrooms} bed</p>
         </div>
         <div className="offer-header-metrics">
           <span><b>{offers.length}</b> active offers</span>

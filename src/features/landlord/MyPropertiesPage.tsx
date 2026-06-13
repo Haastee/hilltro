@@ -10,6 +10,7 @@ import { supabase } from "../../utils/supabase";
 import { propertyImagesComingSoon } from "../../utils/propertyAssets";
 
 const DRAFT_KEY = "hilltro.property.draft";
+const epcRatings = ["", "A", "B", "C", "D", "E", "F", "G"];
 
 const statusClass = {
   LIVE: "live",
@@ -33,6 +34,11 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
   const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaError, setMediaError] = useState("");
+  const [complianceModal, setComplianceModal] = useState<ManagedProperty | null>(null);
+  const [complianceRating, setComplianceRating] = useState("");
+  const [complianceExempt, setComplianceExempt] = useState(false);
+  const [complianceBusy, setComplianceBusy] = useState(false);
+  const [complianceError, setComplianceError] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,6 +75,10 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
           floorplanUrl: row.floorplans?.[0]?.public_url,
           completion: { requiredFieldsComplete: Boolean(row.address_line_1 && row.description && row.rent_pcm), photosUploaded: Boolean(row.property_photos?.length), nextIncompleteStep: row.draft_step === 0 ? "address" : row.draft_step === 1 ? "details" : row.draft_step === 3 ? "photos" : "valuation" },
           videoUrl: row.property_videos?.[0]?.public_url || row.property_videos?.[0]?.external_url,
+          epcRating: row.compliance?.epcRating || "",
+          epcExempt: Boolean(row.compliance?.epcExempt),
+          epcCertificateUrl: row.compliance?.epcCertificateUrl || "",
+          epcCertificateName: row.compliance?.epcCertificateName || "",
           metrics: { photos: row.property_photos?.length || 0, floorplans: row.floorplans?.length || 0, viewings: 0, offers: 0, messages: 0 }
         })));
         setDrafts(loadPropertyDrafts(owner));
@@ -86,6 +96,10 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
         gallery: [property.imageUrl],
         floorplanUrl: property.floorplanUrl,
         videoUrl: property.videoUrl,
+        epcRating: property.epcRating,
+        epcExempt: property.epcExempt,
+        epcCertificateUrl: property.epcCertificateUrl,
+        epcCertificateName: property.epcCertificateName,
         completion: { requiredFieldsComplete: true, photosUploaded: true, nextIncompleteStep: "valuation" },
         metrics: { photos: 1 + (property.imageUrls?.length || 0), floorplans: property.floorplanUrl ? 1 : 0, viewings: 0, offers: 0, messages: 0 }
       }));
@@ -194,6 +208,59 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
     setMediaError("");
   }
 
+  function openComplianceModal(property: ManagedProperty) {
+    setComplianceModal(property);
+    setComplianceRating(property.epcRating || "");
+    setComplianceExempt(Boolean(property.epcExempt));
+    setComplianceError("");
+  }
+
+  async function saveCompliance(file?: File | null) {
+    if (!complianceModal) return;
+    setComplianceBusy(true);
+    setComplianceError("");
+    try {
+      const upload = file ? await storageService.uploadImage(file) : null;
+      const next = {
+        epcRating: complianceRating || null,
+        epcExempt: complianceExempt,
+        epcCertificateUrl: upload?.url || complianceModal.epcCertificateUrl || null,
+        epcCertificateName: upload?.name || complianceModal.epcCertificateName || null
+      };
+      if (import.meta.env.VITE_SUPABASE_URL && !isDemoLandlordSession()) {
+        const { error } = await supabase.from("properties").update({ compliance: next }).eq("id", complianceModal.id);
+        if (error) throw new Error(error.message);
+      }
+      setProperties((current) => current.map((item) => item.id === complianceModal.id ? { ...item, epcRating: next.epcRating || "", epcExempt: next.epcExempt, epcCertificateUrl: next.epcCertificateUrl || "", epcCertificateName: next.epcCertificateName || "" } : item));
+      setComplianceModal((current) => current ? { ...current, epcRating: next.epcRating || "", epcExempt: next.epcExempt, epcCertificateUrl: next.epcCertificateUrl || "", epcCertificateName: next.epcCertificateName || "" } : current);
+    } catch (error) {
+      setComplianceError(error instanceof Error ? error.message : "Could not save compliance documents. Please try again.");
+    } finally {
+      setComplianceBusy(false);
+    }
+  }
+
+  async function deleteCompliance() {
+    if (!complianceModal) return;
+    setComplianceBusy(true);
+    setComplianceError("");
+    try {
+      const next = { epcRating: null, epcExempt: false, epcCertificateUrl: null, epcCertificateName: null };
+      if (import.meta.env.VITE_SUPABASE_URL && !isDemoLandlordSession()) {
+        const { error } = await supabase.from("properties").update({ compliance: next }).eq("id", complianceModal.id);
+        if (error) throw new Error(error.message);
+      }
+      setProperties((current) => current.map((item) => item.id === complianceModal.id ? { ...item, epcRating: "", epcExempt: false, epcCertificateUrl: "", epcCertificateName: "" } : item));
+      setComplianceModal((current) => current ? { ...current, epcRating: "", epcExempt: false, epcCertificateUrl: "", epcCertificateName: "" } : current);
+      setComplianceRating("");
+      setComplianceExempt(false);
+    } catch (error) {
+      setComplianceError(error instanceof Error ? error.message : "Could not delete compliance documents. Please try again.");
+    } finally {
+      setComplianceBusy(false);
+    }
+  }
+
   function deleteDraftEverywhere(draft: PropertyDraft) {
     deletePropertyDraft(draft.id);
     if (ownerId) localStorage.removeItem(`${DRAFT_KEY}.${ownerId}`);
@@ -256,6 +323,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
               <Link className="btn" to={`/landlord/properties/new?propertyId=${property.id}&resume=details`}>Edit Property</Link>
               <button className="btn" type="button" onClick={() => openMediaModal(property, "floorplan")}>{property.floorplanUrl ? "Manage Floorplan" : "Add Floorplan"}</button>
               <button className="btn" type="button" onClick={() => openMediaModal(property, "video")}>{property.videoUrl ? "Manage Video" : "Add Video"}</button>
+              <button className="btn" type="button" onClick={() => openComplianceModal(property)}>Compliance Documents</button>
               <Link className={offerActionClass} to={`/landlord/properties/${property.id}/offers`}>View Offers</Link>
               <Link className="btn" to={`/landlord/properties/${property.id}/viewings`}>Viewings</Link>
               <Link className="btn" to={`/messages?property=${property.id}`}>View Messages</Link>
@@ -297,6 +365,27 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
                 <div className="hero-actions">{((mediaKind === "video" && mediaModal.videoUrl) || (mediaKind === "floorplan" && mediaModal.floorplanUrl)) && <button className="btn" type="button" disabled={mediaBusy} onClick={deleteManagedMedia}>Delete</button>}<button className="btn" type="button" onClick={closeMediaModal}>Close</button></div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {complianceModal && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="card modal-card form-grid">
+            <h2>Compliance documents</h2>
+            <p className="muted">{complianceModal.address}</p>
+            <div className="form-grid two">
+              <SelectField label="EPC rating" value={complianceRating} onChange={(value) => { setComplianceRating(value); if (value !== "F" && value !== "G") setComplianceExempt(false); }} options={epcRatings.map((rating) => ({ value: rating, label: rating ? `EPC ${rating}` : "Select EPC rating" }))} />
+              <label>Replace or add EPC<input type="file" accept="image/*,.pdf" disabled={complianceBusy} onChange={(event) => saveCompliance(event.target.files?.[0] || null)} /></label>
+            </div>
+            {(complianceRating === "F" || complianceRating === "G") && <label className="checkbox-row"><input type="checkbox" checked={complianceExempt} onChange={(event) => setComplianceExempt(event.target.checked)} /> <span>I declare that this property has a valid EPC exemption.</span></label>}
+            {complianceModal.epcCertificateUrl ? <a className="btn secondary" href={complianceModal.epcCertificateUrl} target="_blank" rel="noopener noreferrer">See EPC</a> : complianceModal.epcRating ? <p className="badge">EPC {complianceModal.epcRating}</p> : <p className="notice">No EPC document or rating is currently saved.</p>}
+            {complianceError && <p className="notice error">{complianceError}</p>}
+            <div className="hero-actions">
+              <button className="btn primary" type="button" disabled={complianceBusy || ((complianceRating === "F" || complianceRating === "G") && !complianceExempt)} onClick={() => saveCompliance(null)}>{complianceBusy ? "Saving..." : "Save EPC"}</button>
+              {(complianceModal.epcCertificateUrl || complianceModal.epcRating) && <button className="btn" type="button" disabled={complianceBusy} onClick={deleteCompliance}>Delete EPC</button>}
+              <button className="btn" type="button" onClick={() => setComplianceModal(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}

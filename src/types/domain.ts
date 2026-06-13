@@ -50,6 +50,7 @@ export type Property = {
   landlordFirstName?: string;
   landlordAvatarUrl?: string;
   landlordType?: "Private Landlord" | "Professional Landlord";
+  landlordLiveListingCount?: number;
 };
 
 export type Conversation = {

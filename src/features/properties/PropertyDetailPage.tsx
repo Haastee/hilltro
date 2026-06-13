@@ -14,6 +14,8 @@ import { HilltroAvatar, publicLandlordName } from "../../components/HilltroAvata
 import { similarProperties } from "../../services/locationService";
 import { isPropertySaved, saveHome, trackPropertyEngagement } from "../../services/engagementService";
 import { propertyGallery, videoEmbedUrl, type GalleryItem } from "../../utils/propertyMedia";
+import { landlordTypeForLiveListings } from "../../utils/landlordClassification";
+import { depositDisplay, formatRentPcm, isValidMoneyInput } from "../../utils/propertyPricing";
 
 const PropertyMap = lazy(() => import("../../components/map/PropertyMap"));
 
@@ -164,7 +166,7 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
       id: property.landlordId || "",
       firstName: property.landlordFirstName,
       profilePhotoUrl: property.landlordAvatarUrl,
-      landlordType: property.landlordType || "Private Landlord"
+      landlordType: landlordTypeForLiveListings(property.landlordLiveListingCount || 0)
     }
     : landlordById(property.landlordId);
 
@@ -205,7 +207,8 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
             <HilltroAvatar name={publicLandlordName(landlord)} imageUrl={landlord.profilePhotoUrl} />
             <span><b>{publicLandlordName(landlord)}</b><small>{landlord.landlordType}</small></span>
           </Link>
-          <h2>£{property.rentPcm.toLocaleString("en-GB")} pcm</h2>
+          <h2>{formatRentPcm(property.rentPcm)}</h2>
+          <p className="property-deposit">{depositDisplay(property.rentPcm, property.type)}</p>
           <p>{property.bedrooms} bed · {property.bathrooms} bath · {property.furnishingStatus}</p>
           <form className="form-grid" onSubmit={requestViewing} noValidate>
             <p className="form-note">* Required field</p>
@@ -219,14 +222,15 @@ export function PropertyDetailPage({ user }: { user: User | null }) {
           </form>
         </aside>
       </section>
-      {(property.epcCertificateUrl || property.epcRating) && (
+      {(property.epcCertificateUrl || property.epcRating || property.epcExempt) && (
         <section className="card epc-public-panel">
           <div>
             <p className="eyebrow">Energy performance</p>
-            <h2>EPC {property.epcRating ? `rating ${property.epcRating}` : "certificate"}</h2>
+            <h2>Energy compliance</h2>
             {property.epcExempt && <p className="notice">The landlord has declared a valid EPC exemption for this property.</p>}
+            {!property.epcCertificateUrl && property.epcRating && <span className="badge">EPC {property.epcRating}</span>}
           </div>
-          {property.epcCertificateUrl && <a className="btn secondary" href={property.epcCertificateUrl} target="_blank" rel="noopener noreferrer" download>View EPC</a>}
+          {property.epcCertificateUrl && <a className="btn secondary" href={property.epcCertificateUrl} target="_blank" rel="noopener noreferrer" download>See EPC</a>}
         </section>
       )}
       {saveToast && <div className="save-toast" role="status"><Star size={16} fill="currentColor" /> {saveToast}</div>}
@@ -357,13 +361,13 @@ function OfferFlow({ property, offer, setOffer, step, setStep, onSubmit, onClose
   }
   const screens = [
     { title: "When would you like to move in?", body: <CalendarField label="Move-in date *" value={offer.moveDate} onChange={(moveDate) => setOffer({ ...offer, moveDate })} required />, valid: Boolean(offer.moveDate) },
-    { title: "What rent would you like to offer?", body: <label>Offer amount *<input type="number" value={offer.rent} onChange={(event) => setOffer({ ...offer, rent: event.target.value })} /></label>, valid: Boolean(offer.rent) },
+    { title: "What rent would you like to offer?", body: <label>Offer amount *<input type="number" min="0" step="0.01" value={offer.rent} onChange={(event) => setOffer({ ...offer, rent: event.target.value })} /></label>, valid: isValidMoneyInput(offer.rent) },
     { title: "Who will live at the property?", body: <div className="form-grid two"><label>Occupants *<input type="number" min="1" value={offer.occupants} onChange={(event) => setOffer({ ...offer, occupants: event.target.value })} /></label><label>Relation *<input value={offer.relation} onChange={(event) => setOffer({ ...offer, relation: event.target.value })} placeholder="Single, couple, family, sharers" /></label></div>, valid: Boolean(offer.occupants && offer.relation) },
     { title: "Do you have pets?", body: <div className="form-grid"><SelectField label="Pets *" value={offer.pets} onChange={(pets) => setOffer({ ...offer, pets: pets as "Yes" | "No", petDetails: pets === "No" ? "" : offer.petDetails })} options={[{ value: "No", label: "No" }, { value: "Yes", label: "Yes" }]} />{offer.pets === "Yes" && <><label>Pet Details *<textarea value={offer.petDetails} onChange={(event) => setOffer({ ...offer, petDetails: event.target.value })} placeholder="Please describe pet type, breed, size and age." /></label><label>Pet photo (optional)<input type="file" accept="image/*" onChange={imageUpload("petImage")} /></label>{offer.petImage && <img className="offer-upload-preview" src={offer.petImage} alt="Pet preview" />}</>}</div>, valid: offer.pets === "No" || Boolean(offer.petDetails.trim()) },
     ...(needsEndDate ? [{ title: "When should the tenancy end?", body: <CalendarField label="Tenancy end date *" value={offer.endDate} onChange={(endDate) => setOffer({ ...offer, endDate })} required />, valid: Boolean(offer.endDate) }] : []),
     { title: "Add a note for the landlord.", body: <label>Notes (optional)<textarea value={offer.notes} onChange={(event) => setOffer({ ...offer, notes: event.target.value })} placeholder="List any requests you may have and tell the landlord a little more about yourself." /></label>, valid: true },
     { title: "Add supporting photos.", body: <div className="form-grid"><p className="muted">Optional. Add an image if it helps explain references, supporting information or additional context.</p><label>Supporting Photos (Optional)<input type="file" accept="image/*" onChange={imageUpload("attachmentImage")} /></label>{offer.attachmentImage && <img className="offer-upload-preview" src={offer.attachmentImage} alt="Supporting attachment preview" />}</div>, valid: true },
-    { title: "Review and agree.", body: <label className="checkbox-row"><input type="checkbox" checked={offer.agreed} onChange={(event) => setOffer({ ...offer, agreed: event.target.checked })} /> <span>I agree to the Hilltro <Link to="/privacy">Privacy Policy</Link>, <Link to="/terms">Terms & Conditions</Link> and <Link to="/offer-terms">Offer Terms</Link>.</span></label>, valid: offer.agreed }
+    { title: "Review and agree.", body: <div className="form-grid"><div className="offer-review-summary"><span>Offer rent</span><b>{formatRentPcm(Number(offer.rent || property.rentPcm))}</b><span>Deposit</span><b>{depositDisplay(Number(offer.rent || property.rentPcm), property.type).replace("Deposit: ", "")}</b></div><label className="checkbox-row"><input type="checkbox" checked={offer.agreed} onChange={(event) => setOffer({ ...offer, agreed: event.target.checked })} /> <span>I agree to the Hilltro <Link to="/privacy">Privacy Policy</Link>, <Link to="/terms">Terms & Conditions</Link> and <Link to="/offer-terms">Offer Terms</Link>.</span></label></div>, valid: offer.agreed }
   ];
   const current = screens[step];
   function next() {
