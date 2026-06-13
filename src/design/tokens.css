@@ -865,6 +865,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--color-orang
 .property-gallery { display: grid; gap: 12px; }
 .property-gallery-viewer { position: relative; overflow: hidden; border-radius: var(--radius-xl); background: #111820; }
 .property-gallery-viewer img, .property-gallery-viewer iframe, .property-gallery-viewer video { width: 100%; height: min(64vh, 680px); min-height: 520px; object-fit: cover; border: 0; display: block; }
+.property-gallery-viewer img.gallery-zoomable { cursor: zoom-in; }
 .gallery-counter { position: absolute; left: 16px; top: 16px; min-height: 32px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0 12px; background: rgba(16,24,32,.72); color: white; font-weight: 600; }
 .property-gallery-controls { position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%); display: flex; justify-content: space-between; pointer-events: none; }
 .property-gallery-controls button { pointer-events: auto; }
@@ -880,6 +881,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--color-orang
 .gallery-fullscreen { position: fixed; inset: 0; z-index: 90; display: grid; align-content: center; gap: 14px; padding: 28px; background: rgba(16,24,32,.92); }
 .gallery-fullscreen .property-gallery-viewer { max-width: 1180px; width: 100%; margin: 0 auto; }
 .gallery-fullscreen .property-gallery-viewer img, .gallery-fullscreen .property-gallery-viewer iframe, .gallery-fullscreen .property-gallery-viewer video { height: min(78vh, 760px); }
+.gallery-fullscreen .property-gallery-viewer img { object-fit: contain; cursor: default; }
 .gallery-close { position: fixed; right: 24px; top: 24px; z-index: 91; }
 .fullscreen-thumbs { max-width: 900px; width: 100%; margin: 0 auto; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); }
 .video-tour-prompt { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center; border: 1px solid rgba(255,255,255,.4); border-radius: 999px; padding: 6px; background: rgba(255,255,255,.92); box-shadow: 0 16px 36px rgba(16,24,32,.16); }

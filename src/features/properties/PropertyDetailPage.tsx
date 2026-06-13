@@ -288,7 +288,7 @@ function PropertyGallery({ property, videoPromptDismissed, onDismissVideoPrompt 
     }
   }
 
-  const viewer = (
+  const renderViewer = (inFullscreen: boolean) => (
     <div
       className="property-gallery-viewer"
       onTouchStart={(event) => setTouchStart(event.touches[0].clientX)}
@@ -299,13 +299,15 @@ function PropertyGallery({ property, videoPromptDismissed, onDismissVideoPrompt 
         setTouchStart(null);
       }}
     >
-      {renderGalleryItem(active, property.title)}
+      {/* Tapping a photo/floorplan opens the fullscreen viewer; videos keep
+          their own controls and never trigger fullscreen on click. */}
+      {renderGalleryItem(active, property.title, !inFullscreen && active.kind !== "video" ? () => setFullscreen(true) : undefined)}
       <span className="gallery-counter">{activeIndex + 1} / {gallery.length}</span>
       <div className="property-gallery-controls">
         <button type="button" aria-label="Previous image" onClick={() => move(-1)}><ChevronLeft size={20} /></button>
         <button type="button" aria-label="Next image" onClick={() => move(1)}><ChevronRight size={20} /></button>
       </div>
-      <button className="gallery-fullscreen-trigger" type="button" aria-label="Open fullscreen gallery" onClick={() => setFullscreen(true)}><Maximize2 size={18} /></button>
+      {!inFullscreen && <button className="gallery-fullscreen-trigger" type="button" aria-label="Open fullscreen gallery" onClick={() => setFullscreen(true)}><Maximize2 size={18} /></button>}
       {hasVideo && !videoPromptDismissed && active.kind !== "video" && (
         <div className="video-tour-prompt">
           <button type="button" onClick={() => select(gallery.findIndex((item) => item.kind === "video"))}><Play size={16} /> Watch Property Walkthrough</button>
@@ -317,7 +319,7 @@ function PropertyGallery({ property, videoPromptDismissed, onDismissVideoPrompt 
 
   return (
     <div className="property-media property-gallery">
-      {viewer}
+      {renderViewer(false)}
       <div className="property-gallery-thumbs" aria-label="Property gallery thumbnails">
         {gallery.map((item, index) => (
           <button type="button" className={`${index === activeIndex ? "active" : ""} ${item.kind === "video" ? "video-gallery-thumb" : ""}`} key={item.id} onClick={() => select(index)}>
@@ -330,7 +332,7 @@ function PropertyGallery({ property, videoPromptDismissed, onDismissVideoPrompt 
       {fullscreen && (
         <div className="gallery-fullscreen" role="dialog" aria-modal="true">
           <button className="gallery-close" aria-label="Close fullscreen gallery" onClick={() => setFullscreen(false)}><X size={24} /></button>
-          {viewer}
+          {renderViewer(true)}
           <div className="property-gallery-thumbs fullscreen-thumbs">
             {gallery.map((item, index) => <button type="button" className={`${index === activeIndex ? "active" : ""} ${item.kind === "video" ? "video-gallery-thumb" : ""}`} key={item.id} onClick={() => select(index)}><img src={item.thumbnailUrl} alt="" />{item.kind === "video" && <span><Play size={13} /> Video</span>}</button>)}
           </div>
@@ -340,14 +342,25 @@ function PropertyGallery({ property, videoPromptDismissed, onDismissVideoPrompt 
   );
 }
 
-function renderGalleryItem(item: GalleryItem, alt: string) {
+function renderGalleryItem(item: GalleryItem, alt: string, onActivate?: () => void) {
   if (item.kind === "video") {
     if (/\.(mp4|webm|mov)(\?|#|$)/i.test(item.url)) {
       return <video src={item.url} title={item.title} controls muted playsInline preload="metadata" />;
     }
     return <iframe src={videoEmbedUrl(item.url)} title={item.title} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />;
   }
-  return <img src={item.url} alt={item.kind === "floorplan" ? "Property floorplan" : alt} />;
+  return (
+    <img
+      className={onActivate ? "gallery-zoomable" : undefined}
+      src={item.url}
+      alt={item.kind === "floorplan" ? "Property floorplan" : alt}
+      role={onActivate ? "button" : undefined}
+      tabIndex={onActivate ? 0 : undefined}
+      aria-label={onActivate ? "Open fullscreen gallery" : undefined}
+      onClick={onActivate}
+      onKeyDown={onActivate ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onActivate(); } } : undefined}
+    />
+  );
 }
 
 function OfferFlow({ property, offer, setOffer, step, setStep, onSubmit, onClose }: { property: Property; offer: OfferState; setOffer: (value: OfferState) => void; step: number; setStep: (value: number) => void; onSubmit: () => void; onClose: () => void }) {
