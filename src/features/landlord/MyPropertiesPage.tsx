@@ -46,13 +46,13 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
       const owner = await currentLandlordId();
       setOwnerId(owner);
       if (import.meta.env.VITE_SUPABASE_URL) {
-        if (isDemoLandlordSession()) {
-          setProperties(managedProperties);
-          setDrafts(loadPropertyDrafts(owner));
-          return;
-        }
         const { data: user } = await supabase.auth.getUser();
         if (!user.user) {
+          if (isDemoLandlordSession()) {
+            setProperties(managedProperties);
+            setDrafts(loadPropertyDrafts(owner));
+            return;
+          }
           setProperties([]);
           setDrafts([]);
           return;
@@ -60,7 +60,7 @@ export function MyPropertiesPage({ offerGuidance = false }: { offerGuidance?: bo
         const { data } = await supabase
           .from("properties")
           .select("*, property_photos(public_url), floorplans(public_url), property_videos(public_url, external_url)")
-          .eq("landlord_id", user.user.id)
+          .or(`landlord_id.eq.${user.user.id},created_by.eq.${user.user.id}`)
           .order("updated_at", { ascending: false });
         setProperties((data || []).map((row: any) => ({
           id: row.id,

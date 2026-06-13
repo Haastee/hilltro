@@ -1,7 +1,10 @@
 drop view if exists public.properties_public;
 
 alter table public.properties
-  alter column bathrooms type numeric(3,1) using bathrooms::numeric(3,1);
+  alter column bathrooms type numeric(3,1) using bathrooms::numeric(3,1),
+  add column if not exists floor_level text,
+  add column if not exists has_lift boolean,
+  add column if not exists available_from date;
 
 create view public.properties_public as
 select

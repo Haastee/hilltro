@@ -30,23 +30,30 @@ export function isDemoLandlordSession() {
 // scoped to the signed-in account and never leaks to a different user on the
 // same device. Returns "" when nobody is signed in.
 export async function currentLandlordId(): Promise<string> {
+  if (hasSupabaseConfig) {
+    const { data } = await supabase.auth.getUser();
+    if (data.user?.id) {
+      localStorage.removeItem(DEMO_LANDLORD_SESSION_KEY);
+      return data.user.id;
+    }
+    return isDemoLandlordSession() ? demoLandlordUser.id : "";
+  }
   if (isDemoLandlordSession()) return demoLandlordUser.id;
-  if (!hasSupabaseConfig) {
+  {
     try {
       return (JSON.parse(localStorage.getItem("hilltro.react.session") || "null") as { id?: string } | null)?.id || "";
     } catch {
       return "";
     }
   }
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id || "";
 }
 
 export class SupabaseAuthService implements AuthService {
   async currentUser(): Promise<User | null> {
-    if (isDemoLandlordSession()) return demoLandlordUser;
+    if (!hasSupabaseConfig && isDemoLandlordSession()) return demoLandlordUser;
     const { data } = await supabase.auth.getUser();
-    if (!data.user) return null;
+    if (!data.user) return isDemoLandlordSession() ? demoLandlordUser : null;
+    localStorage.removeItem(DEMO_LANDLORD_SESSION_KEY);
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
     if (!profile) return null;
     return mapUser(profile);
@@ -96,6 +103,7 @@ export class SupabaseAuthService implements AuthService {
     if (!data.session) {
       return { status: "confirm", email: input.email.toLowerCase() };
     }
+    localStorage.removeItem(DEMO_LANDLORD_SESSION_KEY);
     const profile = {
       id: data.user.id,
       email: input.email.toLowerCase(),
@@ -118,6 +126,7 @@ export class SupabaseAuthService implements AuthService {
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
+    localStorage.removeItem(DEMO_LANDLORD_SESSION_KEY);
     const user = await this.currentUser();
     if (!user) throw new Error("Profile not found.");
     return user;
@@ -374,6 +383,7 @@ function mapPublicProperty(
 function toPropertyRow(input: Partial<Property>, landlordId: string, status: "draft" | "live") {
   return {
     landlord_id: landlordId,
+    created_by: landlordId,
     title: input.title || "Draft property",
     address_line_1: input.fullAddress || input.streetName || "Address pending",
     city: input.city || "London",

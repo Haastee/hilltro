@@ -377,6 +377,7 @@ export function PropertyOnboarding() {
         await supabase.from("properties").upsert({
           id: params.get("propertyId") || undefined,
           landlord_id: user.user.id,
+          created_by: user.user.id,
           title: `${town || "Draft"} ${details.propertyType}`,
           address_line_1: addressLine1 || "Address pending",
           address_line_2: addressLine2 || null,
@@ -503,6 +504,7 @@ export function PropertyOnboarding() {
       const { data, error } = await supabase.from("properties").upsert({
         id: params.get("propertyId") || undefined,
         landlord_id: uid,
+        created_by: uid,
         title: property.title,
         address_line_1: addressLine1,
         address_line_2: addressLine2 || null,
